@@ -30,10 +30,11 @@ Option 4.
   - High: cosine ≥ 0.60
   - Medium: 0.45 to below 0.60
   - Low: below 0.45, down to the noise floor
-  - A result that enters the top `limit` only through an exact name or alias match is labeled at least Medium.
+  - A result **with** a cosine value that enters the top `limit` only through an exact name or alias match is labeled at least Medium. Results without a cosine value follow the rule for candidates without an embedding, below.
 - **Noise floor (Q9)**: results whose cosine is below 0.25 **and** that have no keyword hit are not shown. Everything above the floor within `limit` is shown and labeled, never hidden (US-05). The floor is set as the highest value that keeps recall at 10 at or above 0.90 on the eval set.
 - **Default and maximum (Q11)**: 5 results by default, 10 at most.
 - **Registrai entries** are ranked with the same method, using their name and summary, embedded at query time and cached in memory (ADR-0005).
+- **Candidates without an embedding in a hybrid call**: a Registrai entry fetched in time but not embedded before the deadline takes part only in the keyword ranking and qualifies only with at least one matching query term; its fused score has the keyword term only; it is labeled `keyword_match` (never High, Medium or Low) with `exactName` when applicable; in ties, a missing cosine ranks below any present cosine, then BM25, then id. The answer stays `searchMode: "hybrid"` with `complete: false`, Coverage shows Registrai as partially searched with the count, and the summary adds T-20. Details and acceptance test in `03-architecture.md` section 6.1.
 - **Keyword-only mode**: when the model is unavailable (download or load failed, still loading after 3 seconds, or a mismatch with the index), ranking uses BM25 only over the same candidate universe; a candidate needs at least one matching query term. No cosine value is invented: results carry `similarity: "keyword_match"` (and `exactName: true` for exact name or alias matches), the answer declares `searchMode: "keyword_only"` and `complete: false`, and an empty result uses the incomplete-search text T-17, never the "no similar projects" text T-03. Details in `03-architecture.md` section 6.5.
 - **Thresholds live in a versioned config file** (`config/similarity.json`), not in code, and change only with an eval run attached to the pull request.
 

@@ -347,7 +347,14 @@ sequenceDiagram
 ```
 
 - **Candidate universe and fusion**: the semantic ranking and the keyword ranking are computed over the **same** candidate set: all dataset occurrences plus the Registrai entries that were embedded within the budget. Reciprocal rank fusion combines the two rankings of that common set; per-source rank positions are never compared on their own. Ties break by higher cosine, then higher BM25 score, then id in ascending order, so the same input always gives the same order. Occurrences are then collapsed into projects (section 5.6).
-- **Registrai deadline**: 2.5 seconds from the start of the tool call cover the whole Registrai branch, HTTP and embedding of directory summaries. Summaries not yet cached are embedded in batches of 32, and the deadline is checked between batches. At the deadline, the Registrai entries already embedded take part in the semantic ranking and all fetched entries take part in the keyword ranking; Coverage marks Registrai as `partially searched (deadline)`. If no directory response arrives in time, or Registrai returns an error, the answer lists Registrai under "Not searched" with the reason and T-10 is added (US-03, NFR-03).
+- **Registrai deadline**: 2.5 seconds from the start of the tool call cover the whole Registrai branch, HTTP and embedding of directory summaries. Summaries not yet cached are embedded in batches of 32, and the deadline is checked between batches. At the deadline, the Registrai entries already embedded take part in both rankings and the rest follow the policy for candidates without an embedding, below. If no directory response arrives in time, or Registrai returns an error, the answer lists Registrai under "Not searched" with the reason and T-10 is added (US-03, NFR-03).
+- **Candidates without an embedding (partial hybrid)**: in a hybrid call, a Registrai entry fetched in time but not embedded before the deadline has no cosine value. One policy applies to every such candidate:
+  - **Entry**: it takes part only in the keyword ranking, and qualifies only if at least one query term, after stop-word removal, matches its name or summary. Without a keyword match it is left out.
+  - **Fused score**: reciprocal rank fusion with the keyword term only (no semantic term), so it never gets a semantic contribution it did not earn.
+  - **Label**: `similarity: "keyword_match"`, shown as `Similarity: Keyword match only (not compared by meaning)`; `exactName: true` when the match is the exact name or alias. No cosine value is invented and no High, Medium or Low label is given.
+  - **Order and ties**: after fusion, ties break by cosine where both candidates have one, with a missing cosine ranked below any present cosine; then by BM25 score; then by id in ascending order.
+  - **Disclosure**: the answer keeps `searchMode: "hybrid"` but sets `complete: false`; Coverage lists Registrai under Partially searched with reason `deadline` and the number of entries not compared by meaning; the summary adds T-20: `Some Registrai entries were compared by keywords only, because the time limit was reached.`
+  - Acceptance test: model ready, directory arrives, deadline expires before an entry is embedded, and that entry matches only through a keyword in its summary. It appears with `keyword_match`, `exactName: false`, in the same position on every run with the same input, Coverage shows Registrai partially searched with the count, and T-20 is present. Another entry with no keyword match is absent.
 - **Warm-up**: when the server starts and the model is ready, it fetches the directory and embeds its summaries in the background, so the first tool call usually finds a warm cache. A test covers a warm model with a cold directory cache.
 - Projects with a confirmed `registraiSlug` (section 5.6) that appear in the results get their Registrai status and volume from the same calls.
 - Speed target (Q6, to be confirmed in A-05): p95 under 3 seconds with a warm model; under 1 second when Registrai is served from the in-memory cache. The first call after installation includes the model download and load, and is reported as such in the README.
@@ -371,7 +378,7 @@ Every answer computes the Coverage block from the manifest and the Registrai cal
 
 - Searched: each dataset source with its own data date from the manifest. Sources that share a data date are grouped in one line; a source whose file was kept from an older refresh shows its older date separately.
 - Registrai: the real time of the upstream fetch (`fetchedAt`, UTC), and whether the answer used the in-memory cache, for example `Registrai directory (fetched 2026-11-14 10:02 UTC, from cache)`. A cache hit never shows the time of the current call as if it were a fresh query.
-- Partially searched: Registrai when the deadline cut the embedding (section 6.1).
+- Partially searched: Registrai when the deadline cut the embedding, with the number of entries compared by keywords only (section 6.1).
 - Not searched: each source that failed, with the reason (`unavailable at query time`, `rate limited`, `timeout`), and `semantic matching` when the model is unavailable (section 6.5).
 - Dataset updated: `manifest.updatedAt`.
 - Stale warning T-11 when `today - manifest.updatedAt > 14 days` (P1), and per source when one source's data date is more than 14 days older than `manifest.updatedAt`.
@@ -500,7 +507,7 @@ Q7 (Arc-specific knowledge in answers) does not change the architecture: links t
 | A-04 | For a source whose terms forbid automated collection, may the maintainer type records by hand? | Section 5.3, US-01 coverage | No until the owner decides; such a source is excluded |
 | A-05 | Confirm the provisional numbers: p95 under 3 s, gaps thresholds 5 and 1, stale after 14 days, Registrai budget 2.5 s | Sections 5.4, 6.1, 6.4 | As proposed |
 | A-06 | A weekly scheduled run that only opens a pull request: does it respect BR6 ("refreshed weekly by the maintainer")? | ADR-0003 | Yes, because nothing is published without the maintainer's merge |
-| A-07 | Product: the card format must show a project with several occurrences (events, grants, directory) and the new texts T-16 to T-19 and `Keyword match only` | Sections 5.6, 6.5; `02-product.md` sections 4.1 and 8.1 | One card per project, one `Type` line per occurrence, each with prize or grant and source |
+| A-07 | Product: the card format must show a project with several occurrences (events, grants, directory) and the new texts T-16 to T-20 and `Keyword match only` | Sections 5.6, 6.5; `02-product.md` sections 4.1 and 8.1 | One card per project, one `Type` line per occurrence, each with prize or grant and source |
 
 ## 15. Traceability
 

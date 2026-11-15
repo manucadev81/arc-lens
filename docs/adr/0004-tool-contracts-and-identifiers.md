@@ -131,7 +131,11 @@ Regex: `^(hack|grant):[a-z0-9]+(-[a-z0-9]+)*:[a-z0-9]+(-[a-z0-9]+)*$|^(registrai
           "items": {
             "type": "object",
             "required": ["source", "reason"],
-            "properties": { "source": { "type": "string" }, "reason": { "enum": ["deadline"] } }
+            "properties": {
+              "source": { "type": "string" },
+              "reason": { "enum": ["deadline"] },
+              "notComparedByMeaning": { "type": "integer", "minimum": 0 }
+            }
           }
         },
         "notSearched": {
@@ -185,7 +189,7 @@ Input:
 
 Output `structuredContent`: `{ "summary": string, "searchMode": "hybrid" | "keyword_only", "complete": boolean, "results": projectCard[], "coverage": coverage, "attribution": attribution }`.
 
-- Every card has `similarity`: `high`, `medium` or `low` in hybrid mode; `keyword_match` in keyword-only mode.
+- Every card has `similarity`. In hybrid mode: `high`, `medium` or `low` for results with a cosine value, and `keyword_match` for Registrai entries that the deadline left without an embedding (`03-architecture.md` section 6.1). In keyword-only mode: `keyword_match` for every result. A `keyword_match` card never carries an invented cosine value.
 - `complete` is `false` when semantic matching was unavailable or Registrai was not or only partially searched.
 - `limit` counts projects. Order: fused rank, ties by id (ADR-0002).
 
@@ -238,7 +242,7 @@ Input that fails the schema, an idea under 10 characters, or an unknown id are r
 
 ### Text content
 
-Each result also has one text content block with the answer in the Product format (sections 4 and 6 of `02-product.md`), built from the same object as `structuredContent`. A project with several occurrences shows one `Type` line per occurrence, each with its prize or grant and source; the final layout is a Product decision (A-07 in `03-architecture.md`). A snapshot test per Product example (6.1 to 6.4) and per new case (keyword-only, unresolved category, possible duplicate) guards the format.
+Each result also has one text content block with the answer in the Product format (sections 4 and 6 of `02-product.md`), built from the same object as `structuredContent`. A project with several occurrences shows one `Type` line per occurrence, each with its prize or grant and source; the final layout is a Product decision (A-07 in `03-architecture.md`). A snapshot test per Product example (6.1 to 6.4) and per new case (keyword-only, partial hybrid with `keyword_match` entries and T-20, unresolved category, possible duplicate) guards the format.
 
 ## Consequences
 
