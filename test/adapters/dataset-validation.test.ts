@@ -300,6 +300,68 @@ describe("URL fields", () => {
 	});
 });
 
+describe("source, record file and manifest coverage", () => {
+	it("accepts pending and forbidden sources without records or manifest entries", () => {
+		expect(messages(fixture())).toEqual([]);
+	});
+
+	it("requires a record file and a manifest entry for every allowed source", () => {
+		const files = fixture() as unknown as Json;
+		files.sources[2].termsCheck.result = "allowed";
+		const found = messages(files as DatasetFiles);
+		expect(found).toContain(
+			'sources.json/: allowed source "sample-pending" has no records/sample-pending.json',
+		);
+		expect(found).toContain('manifest.json/sources: missing allowed source "sample-pending"');
+	});
+
+	it("rejects records from a source that is pending or forbidden", () => {
+		const files = fixture() as unknown as Json;
+		files.sources[0].termsCheck.result = "forbidden";
+		files.sources[1].termsCheck.result = "pending";
+		const found = messages(files as DatasetFiles);
+		expect(found).toContain(
+			'records/sample-showcase.json/sourceId: source "sample-showcase" is not allowed for collection, so it cannot have records',
+		);
+		expect(found).toContain(
+			'records/sample-grants.json/sourceId: source "sample-grants" is not allowed for collection, so it cannot have records',
+		);
+	});
+
+	it("rejects a manifest entry for an undeclared source", () => {
+		const files = fixture() as unknown as Json;
+		files.manifest.sources.push({
+			sourceId: "ghost-source",
+			dataDate: "2026-11-01",
+			recordCount: 0,
+		});
+		const found = messages(files as DatasetFiles);
+		expect(found).toContain('manifest.json/sources/2/sourceId: unknown source "ghost-source"');
+		expect(found).toContain('manifest.json/sources/2: no record file for "ghost-source"');
+	});
+
+	it("requires the manifest data date to equal the latest record data date of its source", () => {
+		const files = fixture() as unknown as Json;
+		files.manifest.sources[1].dataDate = "2026-11-11";
+		expect(messages(files as DatasetFiles)).toContain(
+			'manifest.json/sources/1/dataDate: is 2026-11-11, but the latest record data date of "sample-showcase" is 2026-11-10',
+		);
+		const older = fixture() as unknown as Json;
+		older.recordFiles[1].content.records[0].source.dataDate = "2026-11-12";
+		expect(messages(older as DatasetFiles)).toContain(
+			'manifest.json/sources/1/dataDate: is 2026-11-10, but the latest record data date of "sample-showcase" is 2026-11-12',
+		);
+	});
+
+	it("rejects a source data date after the dataset update date", () => {
+		const files = fixture() as unknown as Json;
+		files.manifest.updatedAt = "2026-11-01";
+		expect(messages(files as DatasetFiles)).toContain(
+			"manifest.json/sources/1/dataDate: is after the dataset updatedAt 2026-11-01",
+		);
+	});
+});
+
 describe("validate-data command", () => {
 	function run(dataDirectory: string) {
 		return spawnSync(

@@ -65,10 +65,22 @@ export function assignOccurrenceIds(input: IdAssignmentInput): Map<string, strin
 	for (const [sourceKey, id] of input.existing) {
 		if (!input.sourceKeys.includes(sourceKey)) taken.add(id);
 	}
+	const owners = new Map<string, string>();
+	for (const [sourceKey, id] of input.existing) {
+		if (!isOccurrenceId(id)) throw new RangeError(`Existing identifier is invalid: ${id}`);
+		if (!id.startsWith(prefix)) {
+			throw new RangeError(`Existing identifier ${id} does not belong to ${prefix}`);
+		}
+		if (input.retired.has(id)) throw new RangeError(`Existing identifier is retired: ${id}`);
+		const owner = owners.get(id);
+		if (owner !== undefined && owner !== sourceKey) {
+			throw new RangeError(`Existing identifier ${id} is mapped to more than one source key`);
+		}
+		owners.set(id, sourceKey);
+	}
 	for (const sourceKey of input.sourceKeys) {
 		const id = input.existing.get(sourceKey);
 		if (id !== undefined) {
-			if (!isOccurrenceId(id)) throw new RangeError(`Existing identifier is invalid: ${id}`);
 			assigned.set(sourceKey, id);
 			taken.add(id);
 		}

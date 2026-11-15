@@ -88,7 +88,7 @@ type AnyRecord = {
 	aliases: string[];
 	description: string;
 	categories: string[];
-	source: { id: string };
+	source: { id: string; dataDate: string };
 };
 
 const addFormats = ((formatsPlugin as unknown as { default?: unknown }).default ??
@@ -195,6 +195,7 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 
 	const recordIds = new Set<string>();
 	const recordCounts = new Map<string, number>();
+	const latestDataDates = new Map<string, string>();
 	for (const { fileName, content } of files.recordFiles) {
 		const file = `records/${fileName}`;
 		if (!check(validators["record-file"], file, content, issues)) continue;
@@ -203,6 +204,12 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 		if (sourcesOk && !sourceIds.has(sourceId))
 			add(file, "/sourceId", `unknown source "${sourceId}"`);
 		recordCounts.set(sourceId, records.length);
+		for (const record of records) {
+			const latest = latestDataDates.get(sourceId);
+			if (latest === undefined || record.source.dataDate > latest) {
+				latestDataDates.set(sourceId, record.source.dataDate);
+			}
+		}
 		records.forEach((record, index) => {
 			const path = `/records/${index}`;
 			if (recordIds.has(record.id)) add(file, `${path}/id`, `duplicate id "${record.id}"`);
@@ -287,25 +294,76 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 		});
 	}
 
+	const allowedSources = new Set(
+		sourcesOk
+			? (files.sources as { id: string; termsCheck: { result: string } }[])
+					.filter((source) => source.termsCheck.result === "allowed")
+					.map((source) => source.id)
+			: [],
+	);
+
+	if (sourcesOk) {
+		for (const sourceId of sourceIds) {
+			const hasFile = recordCounts.has(sourceId);
+			if (allowedSources.has(sourceId) && !hasFile) {
+				add("sources.json", "/", `allowed source "${sourceId}" has no records/${sourceId}.json`);
+			}
+			if (!allowedSources.has(sourceId) && hasFile) {
+				add(
+					`records/${sourceId}.json`,
+					"/sourceId",
+					`source "${sourceId}" is not allowed for collection, so it cannot have records`,
+				);
+			}
+		}
+	}
+
 	if (manifestOk) {
 		const manifest = files.manifest as {
-			sources: { sourceId: string; recordCount: number }[];
+			updatedAt: string;
+			sources: { sourceId: string; dataDate: string; recordCount: number }[];
 		};
 		const listed = new Set<string>();
-		manifest.sources.forEach((entry, index) => {
+		for (const [index, entry] of manifest.sources.entries()) {
 			const path = `/sources/${index}`;
-			if (listed.has(entry.sourceId))
+			if (listed.has(entry.sourceId)) {
 				add("manifest.json", path, `duplicate source "${entry.sourceId}"`);
+			}
 			listed.add(entry.sourceId);
+			if (sourcesOk && !sourceIds.has(entry.sourceId)) {
+				add("manifest.json", `${path}/sourceId`, `unknown source "${entry.sourceId}"`);
+			}
+			if (entry.dataDate > manifest.updatedAt) {
+				add(
+					"manifest.json",
+					`${path}/dataDate`,
+					`is after the dataset updatedAt ${manifest.updatedAt}`,
+				);
+			}
 			const actual = recordCounts.get(entry.sourceId);
-			if (actual === undefined)
+			if (actual === undefined) {
 				add("manifest.json", path, `no record file for "${entry.sourceId}"`);
-			else if (actual !== entry.recordCount) {
+				continue;
+			}
+			if (actual !== entry.recordCount) {
 				add("manifest.json", `${path}/recordCount`, `is ${entry.recordCount}, file has ${actual}`);
 			}
-		});
+			const latest = latestDataDates.get(entry.sourceId);
+			if (latest !== undefined && latest !== entry.dataDate) {
+				add(
+					"manifest.json",
+					`${path}/dataDate`,
+					`is ${entry.dataDate}, but the latest record data date of "${entry.sourceId}" is ${latest}`,
+				);
+			}
+		}
 		for (const sourceId of recordCounts.keys()) {
 			if (!listed.has(sourceId)) add("manifest.json", "/sources", `missing source "${sourceId}"`);
+		}
+		for (const sourceId of allowedSources) {
+			if (!listed.has(sourceId)) {
+				add("manifest.json", "/sources", `missing allowed source "${sourceId}"`);
+			}
 		}
 	}
 

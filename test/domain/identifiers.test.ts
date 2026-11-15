@@ -142,3 +142,61 @@ describe("assignOccurrenceIds", () => {
 		).toThrow(RangeError);
 	});
 });
+
+describe("assignOccurrenceIds rejects unsafe existing mappings", () => {
+	const base = { kind: "hack" as const, scope: "Sample Hack 2026", retired: new Set<string>() };
+
+	it("refuses to preserve an existing identifier that is retired", () => {
+		expect(() =>
+			assignOccurrenceIds({
+				...base,
+				sourceKeys: ["example-market"],
+				existing: new Map([["example-market", "hack:sample-hack-2026:example-market"]]),
+				retired: new Set(["hack:sample-hack-2026:example-market"]),
+			}),
+		).toThrow("Existing identifier is retired: hack:sample-hack-2026:example-market");
+	});
+
+	it("refuses a retired identifier even when its key left the input", () => {
+		expect(() =>
+			assignOccurrenceIds({
+				...base,
+				sourceKeys: ["other"],
+				existing: new Map([["gone", "hack:sample-hack-2026:gone"]]),
+				retired: new Set(["hack:sample-hack-2026:gone"]),
+			}),
+		).toThrow(RangeError);
+	});
+
+	it("refuses one identifier mapped to two source keys", () => {
+		expect(() =>
+			assignOccurrenceIds({
+				...base,
+				sourceKeys: ["a", "b"],
+				existing: new Map([
+					["a", "hack:sample-hack-2026:same"],
+					["b", "hack:sample-hack-2026:same"],
+				]),
+			}),
+		).toThrow("is mapped to more than one source key");
+	});
+
+	it("refuses an existing identifier from another kind or scope", () => {
+		for (const id of ["grant:sample-hack-2026:a", "hack:other-event:a"]) {
+			expect(() =>
+				assignOccurrenceIds({ ...base, sourceKeys: ["a"], existing: new Map([["a", id]]) }),
+			).toThrow("does not belong to hack:sample-hack-2026:");
+		}
+	});
+
+	it("never returns a retired identifier for any input", () => {
+		const retired = new Set(["hack:sample-hack-2026:a", "hack:sample-hack-2026:a-2"]);
+		const ids = assignOccurrenceIds({
+			...base,
+			sourceKeys: ["a", "A", "a!"],
+			existing: new Map(),
+			retired,
+		});
+		for (const id of ids.values()) expect(retired.has(id)).toBe(false);
+	});
+});

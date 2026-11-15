@@ -18,7 +18,37 @@
 		"kind": "grant",
 		"events": [],
 		"termsUrl": null,
-		"termsCheck": { "result": "pending", "checkedAt": "2026-11-15", "notes": "" },
+		"termsCheck": {
+			"result": "allowed",
+			"checkedAt": "2026-11-15",
+			"notes": "Synthetic manual source for tests."
+		},
 		"method": "manual"
+	},
+	{
+		"id": "sample-pending",
+		"name": "Sample pending",
+		"kind": "hackathon",
+		"events": [],
+		"termsUrl": "https://example.com/pending-terms",
+		"termsCheck": {
+			"result": "pending",
+			"checkedAt": "2026-11-15",
+			"notes": ""
+		},
+		"method": "collector"
+	},
+	{
+		"id": "sample-forbidden",
+		"name": "Sample forbidden",
+		"kind": "hackathon",
+		"events": [],
+		"termsUrl": "https://example.com/forbidden-terms",
+		"termsCheck": {
+			"result": "forbidden",
+			"checkedAt": "2026-11-15",
+			"notes": "Terms forbid automated reading."
+		},
+		"method": "collector"
 	}
 ]
