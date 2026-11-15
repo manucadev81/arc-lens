@@ -207,14 +207,14 @@ Input:
 }
 ```
 
-Output without `category`: `{ "summary": string, "categories": [{ "id", "label", "projectCount" }], "coverage", "attribution" }`.
+Output without `category`: `{ "summary": string, "categories": [{ "id": string, "label": string, "projectCount": integer, "directoryOnlyCount": integer }], "coverage", "attribution" }`. Per category, `projectCount` counts reviewed projects and `directoryOnlyCount` counts unreviewed Registrai directory entries mapped to it (0 when Registrai was not searched; Coverage says so). The same item shape is used for the `categories` list returned with an unresolved category.
 
 Output with `category`: `{ "summary": string, "category": { "id": string | null, "label": string, "matchedBy": "known" | "free_text" | "unresolved" }, "verdict": "several" | "few" | "none" | null, "projectCount": integer, "directoryOnlyCount": integer, "directoryOnlyIds": string[], "uncertainLinks": integer, "results": projectCard[], "categories": [...], "coverage", "attribution" }`.
 
 - `projectCount` counts reviewed projects only (sections 5.6 and 6.2 of `03-architecture.md`); `directoryOnlyCount` and `directoryOnlyIds` list unreviewed Registrai directory entries, which never change the verdict; `uncertainLinks` is the number of `possible` pairs among them.
 - `summary` is T-04, T-05 or T-06, plus T-19 when merging the uncertain pairs would change the verdict and T-21 when there are directory-only entries. With no reviewed project but directory-only entries, `summary` is T-22, never T-06.
 - `verdict` is `null` and `matchedBy` is `unresolved` when a free-text category cannot be resolved because semantic matching is unavailable; the answer then lists the known categories with T-18.
-- At most 20 cards are returned, ordered by name.
+- Card limit: at most 20 reviewed project cards, ordered by name, followed by at most 20 directory-only entries, ordered by name (at most 40 items). `projectCount` and `directoryOnlyCount` always count all matches, not only the items shown; when a list is cut, the summary says how many were not shown.
 
 ### `lookup_project`
 

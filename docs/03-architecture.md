@@ -363,7 +363,7 @@ sequenceDiagram
 
 **Reviewed and unreviewed projects.** A project is *reviewed* when at least one of its occurrences is a dataset record, or when it is a confirmed project in `projects.json` (including one linked to Registrai through `registraiSlug`). A Registrai directory entry that belongs to no reviewed project is *directory-only*: anyone can list an entry in the directory, so it is shown but never trusted to decide a verdict.
 
-- Without `category`: returns the known categories with, for each, the number of reviewed projects and, separately, the number of directory-only entries when Registrai is available (P3, T-07).
+- Without `category`: returns the known categories with, for each, the number of reviewed projects (`projectCount`) and, separately, the number of directory-only entries (`directoryOnlyCount`, 0 when Registrai was not searched, as Coverage states) (P3, T-07).
 - With `category`: resolves the category (section 5.4) and collects the projects in it (section 5.6), reviewed and directory-only.
 - **Verdict**: `several`, `few` or `none` is computed from reviewed projects only. Directory-only entries can never raise a verdict (a burst of directory entries cannot turn a gap into `several`).
 - **Directory-only entries are disclosed, never dropped**: their ids are returned in `directoryOnlyIds` with `directoryOnlyCount`, listed after the reviewed projects and marked `Directory entry, not reviewed`.
@@ -372,10 +372,10 @@ sequenceDiagram
   - reviewed `none` and `directoryOnlyCount = 0`: T-06.
   - reviewed `none` and `directoryOnlyCount > 0`: T-22, never T-06: `No reviewed project found in this category. <n> Registrai directory entries were found but are not reviewed; they are listed below.` T-06 would claim an absence the directory contradicts (NFR-02).
   - T-19 (uncertain links) still applies to the reviewed count.
-- Acceptance tests: 10 directory-only entries and 2 reviewed projects give `few`, `directoryOnlyCount: 10` and T-05 plus T-21; 0 reviewed and 3 directory-only give `none` with T-22, not T-06; 0 reviewed and 0 directory-only give T-06; a Registrai entry linked to a confirmed project counts as reviewed.
+- Acceptance tests: without `category`, a category with 2 reviewed projects and 4 directory-only entries is listed with `projectCount: 2` and `directoryOnlyCount: 4`, and with Registrai unavailable it is listed with `directoryOnlyCount: 0` and Registrai under Not searched; 10 directory-only entries and 2 reviewed projects give `few`, `directoryOnlyCount: 10` and T-05 plus T-21; 0 reviewed and 3 directory-only give `none` with T-22, not T-06; 0 reviewed and 0 directory-only give T-06; a Registrai entry linked to a confirmed project counts as reviewed.
 
 - Known categories match by id, label or a synonym listed in `categories.json`, case- and accent-insensitive, without the model.
-- Request caps: at most 2 Registrai requests (`/ecosystem` and `/arc/apps-week`), no per-entry detail calls. At most 20 reviewed project cards are shown, ordered by name, then at most 20 directory-only entries; the summary gives both totals.
+- Request caps: at most 2 Registrai requests (`/ecosystem` and `/arc/apps-week`), no per-entry detail calls. At most 20 reviewed project cards are shown, ordered by name, then at most 20 directory-only entries, ordered by name (at most 40 items). `projectCount` and `directoryOnlyCount` count all matches; when a list is cut, the summary says how many were not shown.
 
 ### 6.3 `lookup_project` (F3)
 
