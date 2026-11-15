@@ -217,6 +217,89 @@ describe("dataset validation", () => {
 	});
 });
 
+describe("personal data in every free-text field", () => {
+	it("scans event name and track, grant program and cohort, and status evidence", () => {
+		const files = fixture();
+		const record = firstRecord(files);
+		record.event.name = "Hack contact: host@example.com";
+		record.event.track = "Call +55 11 98765-4321";
+		record.status.evidence[0].result = "owner mail owner@example.com";
+		const grants = files.recordFiles.find((f) => f.fileName === "sample-grants.json")
+			?.content as Json;
+		grants.records[0].grant.program = "Program by @someone";
+		grants.records[0].grant.cohort = "Built by Alice Silva";
+		const found = messages(files);
+		expect(found).toContain(
+			"records/sample-showcase.json/records/0/event/name: personal data pattern: email",
+		);
+		expect(found).toContain(
+			"records/sample-showcase.json/records/0/event/track: personal data pattern: phone",
+		);
+		expect(found).toContain(
+			"records/sample-showcase.json/records/0/status/evidence/0/result: personal data pattern: email",
+		);
+		expect(found).toContain(
+			"records/sample-grants.json/records/0/grant/program: personal data pattern: handle",
+		);
+		expect(found).toContain(
+			"records/sample-grants.json/records/0/grant/cohort: personal data pattern: person_name",
+		);
+	});
+
+	it("rejects personal profile hosts in link fields", () => {
+		const files = fixture();
+		firstRecord(files).links.website = "https://x.com/alice";
+		firstRecord(files).links.demo = "https://t.me/alice";
+		const found = messages(files);
+		expect(found).toContain(
+			"records/sample-showcase.json/records/0/links/website: personal data pattern: profile_link",
+		);
+		expect(found).toContain(
+			"records/sample-showcase.json/records/0/links/demo: personal data pattern: profile_link",
+		);
+	});
+
+	it("scans sources, categories, projects and identity proposals", () => {
+		const files = fixture() as unknown as Json;
+		files.sources[0].termsCheck.notes = "Approved by someone@example.com";
+		files.categories.categories[0].description = "Curated with @someone";
+		files.projects[0].evidence.push("confirmed with john#1234");
+		files.identityPending[0].evidenceFor.push("same owner x.com/alice");
+		const found = messages(files as DatasetFiles);
+		expect(found).toContain("sources.json/0/termsCheck/notes: personal data pattern: email");
+		expect(found).toContain(
+			"categories.json/categories/0/description: personal data pattern: handle",
+		);
+		expect(found).toContain("projects.json/0/evidence/1: personal data pattern: discord_tag");
+		expect(found).toContain(
+			"identity-pending.json/0/evidenceFor/1: personal data pattern: profile_link",
+		);
+	});
+
+	it("does not scan structured fields such as ids, dates and categories", () => {
+		const files = fixture();
+		expect(messages(files)).toEqual([]);
+		firstRecord(files).description =
+			"Contract 0x8f3a2b1c4d5e6f708192a3b4c5d6e7f8091a2b3c, editions 2024-2025, v22.20.5";
+		expect(messages(files)).toEqual([]);
+	});
+});
+
+describe("URL fields", () => {
+	it.each([
+		["http://example.com/demo", false],
+		["https://user:secret@example.com/demo", false],
+		["https://token@example.com/demo", false],
+		["javascript:alert(1)", false],
+		["https://example.com/demo?ref=a@b", true],
+		["https://example.com/demo", true],
+	])("%s accepted: %s", (url, accepted) => {
+		const files = fixture();
+		firstRecord(files).links.demo = url;
+		expect(messages(files).some((m) => m.includes("/records/0/links/demo"))).toBe(!accepted);
+	});
+});
+
 describe("validate-data command", () => {
 	function run(dataDirectory: string) {
 		return spawnSync(

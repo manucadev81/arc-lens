@@ -1,11 +1,54 @@
 import { Ajv2020, type ErrorObject, type ValidateFunction } from "ajv/dist/2020.js";
 import formatsPlugin from "ajv-formats";
 import {
-	findPersonalDataInFields,
+	findPersonalDataInValue,
 	isOccurrenceId,
 	isProjectId,
 	isRegistraiId,
+	type TextScanPolicy,
 } from "../../domain/index.js";
+
+type Path = readonly (string | number)[];
+
+const at = (path: Path, ...expected: (string | number | null)[]) =>
+	path.length === expected.length &&
+	expected.every((part, index) => part === null || part === path[index]);
+
+export const SCAN_POLICIES = {
+	record: {
+		skip: (path: Path) =>
+			path[0] === "categories" ||
+			["id", "kind", "prize", "firstSeen", "updatedAt"].some((key) => at(path, key)) ||
+			at(path, "event", "id") ||
+			at(path, "grant", "date") ||
+			at(path, "source", "id") ||
+			at(path, "source", "dataDate") ||
+			at(path, "status", "value") ||
+			at(path, "status", "checkedAt") ||
+			at(path, "status", "evidence", null, "signal") ||
+			at(path, "status", "evidence", null, "at"),
+		isUrl: (path: Path) => path[0] === "links" || at(path, "source", "url"),
+	},
+	source: {
+		skip: (path: Path) =>
+			["id", "kind", "method"].some((key) => at(path, key)) ||
+			path[0] === "events" ||
+			at(path, "termsCheck", "result") ||
+			at(path, "termsCheck", "checkedAt"),
+		isUrl: (path: Path) => at(path, "termsUrl"),
+	},
+	category: { skip: (path: Path) => at(path, "id"), isUrl: () => false },
+	project: {
+		skip: (path: Path) =>
+			["id", "registraiSlug", "confirmedAt"].some((key) => at(path, key)) ||
+			path[0] === "occurrences",
+		isUrl: () => false,
+	},
+	proposal: {
+		skip: (path: Path) => path[0] === "ids" || at(path, "kind") || at(path, "proposedAt"),
+		isUrl: () => false,
+	},
+} satisfies Record<string, TextScanPolicy>;
 
 export const SCHEMA_NAMES = [
 	"common",
@@ -98,6 +141,12 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 	const issues: DatasetIssue[] = [];
 	const add = (file: string, path: string, message: string) => issues.push({ file, path, message });
 
+	const scan = (file: string, path: string, value: unknown, policy: TextScanPolicy) => {
+		for (const finding of findPersonalDataInValue(value, policy)) {
+			add(file, `${path}/${finding.field}`, `personal data pattern: ${finding.kinds.join(", ")}`);
+		}
+	};
+
 	const sourcesOk = check(validators.sources, "sources.json", files.sources, issues);
 	const categoriesOk = check(validators.categories, "categories.json", files.categories, issues);
 	const aliasesOk = check(validators.aliases, "aliases.json", files.aliases, issues);
@@ -113,6 +162,11 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 	const sourceIds = new Set(
 		sourcesOk ? (files.sources as { id: string }[]).map((source) => source.id) : [],
 	);
+	if (sourcesOk) {
+		for (const [index, source] of (files.sources as unknown[]).entries()) {
+			scan("sources.json", `/${index}`, source, SCAN_POLICIES.source);
+		}
+	}
 	if (sourcesOk && sourceIds.size !== (files.sources as unknown[]).length) {
 		add("sources.json", "/", "duplicate source id");
 	}
@@ -123,6 +177,11 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 	);
 	if (categoriesOk) {
 		const declared = (files.categories as { categories: unknown[] }).categories.length;
+		for (const [index, category] of (
+			files.categories as { categories: unknown[] }
+		).categories.entries()) {
+			scan("categories.json", `/categories/${index}`, category, SCAN_POLICIES.category);
+		}
 		if (categoryIds.size !== declared)
 			add("categories.json", "/categories", "duplicate category id");
 		for (const [key, target] of Object.entries(
@@ -157,13 +216,7 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 					}
 				}
 			}
-			for (const finding of findPersonalDataInFields({
-				name: record.name,
-				aliases: record.aliases,
-				description: record.description,
-			})) {
-				add(file, `${path}/${finding.field}`, `personal data pattern: ${finding.kinds.join(", ")}`);
-			}
+			scan(file, path, record, SCAN_POLICIES.record);
 		});
 	}
 
@@ -172,6 +225,7 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 		const owner = new Map<string, string>();
 		(files.projects as { id: string; occurrences: string[] }[]).forEach((project, index) => {
 			const path = `/${index}`;
+			scan("projects.json", path, project, SCAN_POLICIES.project);
 			if (projectIds.has(project.id))
 				add("projects.json", `${path}/id`, `duplicate id "${project.id}"`);
 			projectIds.add(project.id);
@@ -226,6 +280,7 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 
 	if (pendingOk) {
 		(files.identityPending as { ids: string[] }[]).forEach((proposal, index) => {
+			scan("identity-pending.json", `/${index}`, proposal, SCAN_POLICIES.proposal);
 			for (const id of proposal.ids) {
 				if (!resolvable(id)) add("identity-pending.json", `/${index}/ids`, `unknown id "${id}"`);
 			}
