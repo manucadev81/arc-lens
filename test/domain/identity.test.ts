@@ -11,13 +11,13 @@ import {
 	directoryQuotaNote,
 	gapSummary,
 	gapVerdict,
+	genericLinkWarning,
 	type IdentityProposal,
 	isSafeDirectoryLink,
 	normalizeRepositoryUrl,
 	ProjectIndex,
 	projectOccurrences,
 	proposeIdentityLinks,
-	proposeIdentityLinksWithReport,
 	SELF_DECLARED_LINKS,
 	websiteDomain,
 } from "../../src/domain/index.js";
@@ -68,6 +68,10 @@ function entry(slug: string, name: string, links: string[] = []): DirectoryEntry
 		url: `https://builder.registrai.cc/ecosystem/${slug}`,
 		links,
 	};
+}
+
+function propose(input: Parameters<typeof proposeIdentityLinks>[0]): IdentityProposal[] {
+	return [...proposeIdentityLinks(input).proposals];
 }
 
 const REPO = "https://github.com/example/examplemarket";
@@ -158,7 +162,7 @@ describe("unlinked and same-name projects", () => {
 	});
 
 	it("proposes only a possible link for the same name without a shared strong key", () => {
-		const proposals = proposeIdentityLinks({
+		const proposals = propose({
 			records: [alpha, beta],
 			directoryEntries: [],
 			projects: [],
@@ -177,7 +181,7 @@ describe("unlinked and same-name projects", () => {
 	});
 
 	it("keeps them as two projects, each pointing to the other with possibleSameAs", () => {
-		const pending: IdentityProposal[] = proposeIdentityLinks({
+		const pending: IdentityProposal[] = propose({
 			records: [alpha, beta],
 			directoryEntries: [],
 			projects: [],
@@ -206,7 +210,7 @@ describe("unlinked and same-name projects", () => {
 	it("flags that the count may be lower only when merging changes the verdict", () => {
 		const others = ["a", "b", "c"].map((slug) => hack("event", slug, slug.toUpperCase()));
 		const records = [alpha, beta, ...others];
-		const pending = proposeIdentityLinks({
+		const pending = propose({
 			records,
 			directoryEntries: [],
 			projects: [],
@@ -249,21 +253,22 @@ describe("strong-key proposals", () => {
 		const b = hack("e2", "payments", "Totally Different", {
 			repository: "http://www.github.com/example/pay/tree/main",
 		});
-		const proposals = proposeIdentityLinks({
+		const proposals = propose({
 			records: [a, b],
 			directoryEntries: [entry("pay", "Pay", ["https://github.com/example/pay"])],
 			projects: [],
 			pending: [],
 			today: "2026-11-18",
 		});
-		expect(proposals.filter((p) => p.kind === "strong_key").map((p) => p.ids)).toEqual([
-			[a.id, b.id],
-			[a.id, "registrai:pay"],
-			[b.id, "registrai:pay"],
+		expect(proposals.filter((p) => p.kind === "strong_key")).toEqual([
+			{
+				ids: [a.id, b.id, "registrai:pay"],
+				kind: "strong_key",
+				evidenceFor: ["same repository github.com/example/pay"],
+				evidenceAgainst: [SELF_DECLARED_LINKS],
+				proposedAt: "2026-11-18",
+			},
 		]);
-		expect(
-			proposals.every((p) => p.evidenceFor.includes("same repository github.com/example/pay")),
-		).toBe(true);
 	});
 
 	it("links by website domain but not by shared hosting or code hosts", () => {
@@ -271,7 +276,7 @@ describe("strong-key proposals", () => {
 		const b = hack("e2", "b", "Beta", { website: "https://alpha.example" });
 		const c = hack("e3", "c", "Gamma", { website: "https://devpost.com/software/c" });
 		const d = hack("e4", "d", "Delta", { website: "https://devpost.com/software/d" });
-		const proposals = proposeIdentityLinks({
+		const proposals = propose({
 			records: [a, b, c, d],
 			directoryEntries: [],
 			projects: [],
@@ -286,7 +291,7 @@ describe("strong-key proposals", () => {
 		const frozen = structuredClone(projects);
 		const extra = hack("e9", "examplemarket", "ExampleMarket");
 		const records = [...market, extra];
-		const first = proposeIdentityLinks({
+		const first = propose({
 			records,
 			directoryEntries: [],
 			projects,
@@ -296,7 +301,7 @@ describe("strong-key proposals", () => {
 		expect(projects).toEqual(frozen);
 		expect(first.every((p) => p.ids.includes(extra.id))).toBe(true);
 		expect(first.every((p) => p.kind === "possible")).toBe(true);
-		const reversed = proposeIdentityLinks({
+		const reversed = propose({
 			records: [...records].reverse(),
 			directoryEntries: [],
 			projects,
@@ -305,7 +310,7 @@ describe("strong-key proposals", () => {
 		});
 		expect(reversed).toEqual(first);
 		expect(
-			proposeIdentityLinks({
+			propose({
 				records,
 				directoryEntries: [],
 				projects,
@@ -401,6 +406,60 @@ describe("resolving ids to the current project", () => {
 	});
 });
 
+describe("only possible links create uncertainty", () => {
+	it("a pending strong_key proposal does not add possibleSameAs or T-19", () => {
+		const records = ["a", "b", "c", "d", "e"].map((slug) => hack("e1", slug, slug.toUpperCase()));
+		const pendingStrong: IdentityProposal = {
+			ids: [records[0]?.id ?? "", records[1]?.id ?? ""],
+			kind: "strong_key",
+			evidenceFor: ["same repository github.com/x/y"],
+			evidenceAgainst: [],
+			proposedAt: "2026-11-18",
+		};
+		const index = new ProjectIndex({
+			records,
+			projects: [],
+			aliases: [],
+			pending: [pendingStrong],
+		});
+		expect(index.possibleSameAs(records[0]?.id ?? "")).toEqual([]);
+		expect(
+			countProjects(
+				records.map((r) => r.id),
+				index,
+			),
+		).toMatchObject({ verdict: "several", mayBeLower: false });
+		const asPossible = new ProjectIndex({
+			records,
+			projects: [],
+			aliases: [],
+			pending: [{ ...pendingStrong, kind: "possible" }],
+		});
+		expect(
+			countProjects(
+				records.map((r) => r.id),
+				asPossible,
+			),
+		).toMatchObject({ mayBeLower: true });
+	});
+});
+
+describe("stable result payload", () => {
+	it("returns matched occurrence ids in a canonical order regardless of input order", () => {
+		const index = new ProjectIndex({
+			records: market,
+			projects: [confirmed],
+			aliases: [],
+			pending: [],
+		});
+		const ranked = market.map((r) => ({ occurrenceId: r.id, score: 0.5 }));
+		const forward = collapseToProjects(ranked, index, 1);
+		const backward = collapseToProjects([...ranked].reverse(), index, 1);
+		expect(forward).toEqual(backward);
+		expect(forward[0]?.matchedOccurrenceIds).toEqual(market.map((r) => r.id).sort());
+	});
+});
+
 describe("gap verdict thresholds", () => {
 	it.each([
 		[0, "none"],
@@ -424,7 +483,7 @@ describe("proposal explosion guards", () => {
 
 	it("1,500 records sharing an Arc explorer link produce no proposals", () => {
 		const records = many(1500, { website: "https://testnet.arcscan.app/address/0xabc" });
-		const report = proposeIdentityLinksWithReport({
+		const report = proposeIdentityLinks({
 			records,
 			directoryEntries: [],
 			projects: [],
@@ -435,13 +494,13 @@ describe("proposal explosion guards", () => {
 		expect(report.omitted).toBe(0);
 	});
 
-	it("1,500 records sharing a template repository and name are reported as shared keys, not pairs", () => {
+	it("1,500 records sharing a template repository and name give no proposal and are reported", () => {
 		const records = many(
 			1500,
 			{ repository: "https://github.com/template/arc-starter" },
 			() => "Arc Starter",
 		);
-		const report = proposeIdentityLinksWithReport({
+		const report = proposeIdentityLinks({
 			records,
 			directoryEntries: [],
 			projects: [],
@@ -450,32 +509,101 @@ describe("proposal explosion guards", () => {
 		});
 		expect(report.proposals).toEqual([]);
 		expect(report.sharedKeys).toEqual([
-			{ key: "repo:github.com/template/arc-starter", candidates: 1500 },
-			{ key: "name:arcstarter", candidates: 1500 },
+			{ key: "repo:github.com/template/arc-starter", candidates: 1500, proposed: false },
+			{ key: "name:arcstarter", candidates: 1500, proposed: false },
 		]);
 	});
 
-	it("pairs up to three candidates per key and treats a fourth as shared", () => {
+	it("proposes one group per key, flagging groups above three as possibly generic instead of dropping them", () => {
 		const three = many(3, { repository: "https://github.com/team/app" });
 		expect(
-			proposeIdentityLinks({
+			propose({
 				records: three,
 				directoryEntries: [],
 				projects: [],
 				pending: [],
 				today: "2026-11-18",
 			}),
-		).toHaveLength(3);
+		).toEqual([
+			{
+				ids: three.map((r) => r.id).sort(),
+				kind: "strong_key",
+				evidenceFor: ["same repository github.com/team/app"],
+				evidenceAgainst: [],
+				proposedAt: "2026-11-18",
+			},
+		]);
 		const four = many(4, { repository: "https://github.com/team/app" });
-		expect(
-			proposeIdentityLinks({
-				records: four,
-				directoryEntries: [],
-				projects: [],
-				pending: [],
-				today: "2026-11-18",
-			}),
-		).toEqual([]);
+		const report = proposeIdentityLinks({
+			records: four,
+			directoryEntries: [],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+		});
+		expect(report.proposals).toEqual([
+			{
+				ids: four.map((r) => r.id).sort(),
+				kind: "strong_key",
+				evidenceFor: ["same repository github.com/team/app"],
+				evidenceAgainst: [genericLinkWarning(4)],
+				proposedAt: "2026-11-18",
+			},
+		]);
+		expect(report.sharedKeys).toEqual([
+			{ key: "repo:github.com/team/app", candidates: 4, proposed: true },
+		]);
+	});
+
+	it("proposes the five occurrences of one real project sharing a repository as a single group", () => {
+		const report = proposeIdentityLinks({
+			records: market,
+			directoryEntries: [entry("examplemarket", "ExampleMarket", [REPO])],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+		});
+		const strong = report.proposals.filter((p) => p.kind === "strong_key");
+		expect(strong).toHaveLength(1);
+		expect(strong[0]?.ids).toEqual([...market.map((r) => r.id), "registrai:examplemarket"].sort());
+		expect(strong[0]?.evidenceAgainst).toEqual([SELF_DECLARED_LINKS, genericLinkWarning(5)].sort());
+		expect(report.proposals.filter((p) => p.kind === "possible")).toEqual([]);
+	});
+
+	it("does not add same-name possible links inside a strong group larger than three", () => {
+		const records = [
+			["e1", "Nova"],
+			["e2", "Nova"],
+			["e3", "Nova Pay"],
+			["e4", "Pay Nova"],
+		].map(([event, name]) =>
+			hack(event ?? "", "nova", name ?? "", { repository: "https://github.com/team/nova" }),
+		);
+		const proposals = propose({
+			records,
+			directoryEntries: [],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+		});
+		expect(proposals.map((p) => p.kind)).toEqual(["strong_key"]);
+	});
+
+	it("exposes omitted proposals in the public result", () => {
+		const records = Array.from({ length: 20 }, (_, i) => [
+			hack("e1", `a${i}`, `Alpha ${i}`, { repository: `https://github.com/team/app-${i}` }),
+			hack("e2", `b${i}`, `Beta ${i}`, { repository: `https://github.com/team/app-${i}` }),
+		]).flat();
+		const report = proposeIdentityLinks({
+			records,
+			directoryEntries: [],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+			maxProposals: 5,
+		});
+		expect(report.proposals).toHaveLength(5);
+		expect(report.omitted).toBe(15);
 	});
 
 	it("caps proposals per refresh and reports how many were omitted, strong keys first", () => {
@@ -483,7 +611,7 @@ describe("proposal explosion guards", () => {
 			hack("e1", `a${i}`, `Alpha ${i}`, { repository: `https://github.com/team/app-${i}` }),
 			hack("e2", `b${i}`, `Beta ${i}`, { repository: `https://github.com/team/app-${i}` }),
 		]).flat();
-		const report = proposeIdentityLinksWithReport({
+		const report = proposeIdentityLinks({
 			records,
 			directoryEntries: [],
 			projects: [],
@@ -513,7 +641,7 @@ describe("directory links are self-declared and filtered", () => {
 	const legit = hack("e1", "pay", "Pay", { repository: "https://github.com/legit/pay" });
 
 	it("marks strong keys that rely on a Registrai entry as self-declared", () => {
-		const proposals = proposeIdentityLinks({
+		const proposals = propose({
 			records: [legit],
 			directoryEntries: [entry("copycat", "Copycat", ["https://github.com/legit/pay"])],
 			projects: [],
@@ -537,7 +665,7 @@ describe("directory links are self-declared and filtered", () => {
 			"https://user:secret@github.com/legit/pay",
 			"javascript:alert(1)",
 		]) {
-			const proposals = proposeIdentityLinks({
+			const proposals = propose({
 				records: [legit],
 				directoryEntries: [entry("other", "Other", [link])],
 				projects: [],
@@ -664,7 +792,7 @@ describe("gap summary never implies a false absence", () => {
 		const five = ["a", "b", "c", "d"].map((slug) => hack("e2", slug, slug.toUpperCase()));
 		const twin = hack("e3", "a", "A");
 		const records = [...five, twin];
-		const pending = proposeIdentityLinks({
+		const pending = propose({
 			records,
 			directoryEntries: [],
 			projects: [],

@@ -165,35 +165,45 @@ function sortedPair(a: string, b: string): [string, string] {
 }
 
 export const DEFAULT_MAX_CANDIDATES_PER_KEY = 3;
+export const DEFAULT_MAX_GROUP_SIZE = 50;
 export const DEFAULT_MAX_PROPOSALS = 200;
 export const SELF_DECLARED_LINKS = "links are self-declared by the Registrai entry";
 
+export function genericLinkWarning(candidates: number): string {
+	return `shared by ${candidates} occurrences; may be a template, explorer or other generic link`;
+}
+
+export interface SharedKey {
+	readonly key: string;
+	readonly candidates: number;
+	readonly proposed: boolean;
+}
+
 export interface IdentityProposalReport {
 	readonly proposals: readonly IdentityProposal[];
-	readonly sharedKeys: readonly { readonly key: string; readonly candidates: number }[];
+	readonly sharedKeys: readonly SharedKey[];
 	readonly omitted: number;
 }
 
-export function proposeIdentityLinksWithReport(input: {
+export function proposeIdentityLinks(input: {
 	readonly records: readonly DatasetRecord[];
 	readonly directoryEntries: readonly DirectoryEntry[];
 	readonly projects: readonly ConfirmedProject[];
 	readonly pending: readonly IdentityProposal[];
 	readonly today: IsoDate;
 	readonly maxCandidatesPerKey?: number;
+	readonly maxGroupSize?: number;
 	readonly maxProposals?: number;
 }): IdentityProposalReport {
-	const maxPerKey = input.maxCandidatesPerKey ?? DEFAULT_MAX_CANDIDATES_PER_KEY;
+	const genericAbove = input.maxCandidatesPerKey ?? DEFAULT_MAX_CANDIDATES_PER_KEY;
+	const maxGroupSize = input.maxGroupSize ?? DEFAULT_MAX_GROUP_SIZE;
 	const maxProposals = input.maxProposals ?? DEFAULT_MAX_PROPOSALS;
 	const group = new Map<string, string>();
 	for (const project of input.projects) {
 		for (const occurrence of project.occurrences) group.set(occurrence, project.id);
 		if (project.registraiSlug) group.set(`registrai:${project.registraiSlug}`, project.id);
 	}
-	const sameGroup = (a: string, b: string) => {
-		const groupA = group.get(a);
-		return groupA !== undefined && groupA === group.get(b);
-	};
+	const groupOf = (id: string) => group.get(id) ?? id;
 
 	const candidates: Candidate[] = [
 		...input.records.map((record) => ({
@@ -209,46 +219,39 @@ export function proposeIdentityLinksWithReport(input: {
 			fromDirectory: true,
 		})),
 	];
+	const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+	const sharedKeys: SharedKey[] = [];
+	const known = new Set(input.pending.map((p) => `${p.kind} ${[...p.ids].sort().join(" ")}`));
 
-	const sharedKeys: { key: string; candidates: number }[] = [];
-	const pairsWithin = (
-		groups: Map<string, Candidate[]>,
-		label: (key: string) => string,
-		onPair: (a: Candidate, b: Candidate, key: string) => void,
-	) => {
-		for (const [key, members] of [...groups].sort(([a], [b]) => (a < b ? -1 : 1))) {
-			const unique = [...new Map(members.map((m) => [m.id, m])).values()];
-			if (unique.length > maxPerKey) {
-				sharedKeys.push({ key: label(key), candidates: unique.length });
-				continue;
-			}
-			for (let i = 0; i < unique.length; i++) {
-				for (let j = i + 1; j < unique.length; j++) {
-					const a = unique[i];
-					const b = unique[j];
-					if (a && b && !sameGroup(a.id, b.id)) onPair(a, b, key);
-				}
+	const strong = new Map<string, { ids: string[]; evidence: Set<string>; against: Set<string> }>();
+	const byKey = new Map<string, Set<string>>();
+	for (const candidate of candidates) {
+		for (const { key } of candidate.keys)
+			byKey.set(key, (byKey.get(key) ?? new Set()).add(candidate.id));
+	}
+	for (const [key, idSet] of [...byKey].sort(([a], [b]) => (a < b ? -1 : 1))) {
+		const ids = [...idSet].sort();
+		if (new Set(ids.map(groupOf)).size < 2) continue;
+		if (ids.length > genericAbove) {
+			sharedKeys.push({ key, candidates: ids.length, proposed: ids.length <= maxGroupSize });
+			if (ids.length > maxGroupSize) continue;
+		}
+		const signature = ids.join(" ");
+		const current = strong.get(signature) ?? { ids, evidence: new Set(), against: new Set() };
+		const first = byId.get(ids[0] ?? "");
+		current.evidence.add(first?.keys.find((k) => k.key === key)?.evidence ?? key);
+		if (ids.some((id) => byId.get(id)?.fromDirectory)) current.against.add(SELF_DECLARED_LINKS);
+		if (ids.length > genericAbove) current.against.add(genericLinkWarning(ids.length));
+		strong.set(signature, current);
+	}
+	const strongPairs = new Set<string>();
+	for (const { ids } of strong.values()) {
+		for (let i = 0; i < ids.length; i++) {
+			for (let j = i + 1; j < ids.length; j++) {
+				strongPairs.add(`${ids[i]} ${ids[j]}`);
 			}
 		}
-	};
-
-	const strong = new Map<string, { evidence: Set<string>; fromDirectory: boolean }>();
-	const byKey = new Map<string, Candidate[]>();
-	for (const candidate of candidates) {
-		for (const { key } of candidate.keys) byKey.set(key, [...(byKey.get(key) ?? []), candidate]);
 	}
-	pairsWithin(
-		byKey,
-		(key) => key,
-		(a, b, key) => {
-			const evidence = a.keys.find((k) => k.key === key)?.evidence ?? key;
-			const pair = sortedPair(a.id, b.id).join(" ");
-			const current = strong.get(pair) ?? { evidence: new Set<string>(), fromDirectory: false };
-			current.evidence.add(evidence);
-			current.fromDirectory ||= a.fromDirectory || b.fromDirectory;
-			strong.set(pair, current);
-		},
-	);
 
 	const possible = new Map<string, Set<string>>();
 	const byName = new Map<string, Candidate[]>();
@@ -257,28 +260,37 @@ export function proposeIdentityLinksWithReport(input: {
 			byName.set(name, [...(byName.get(name) ?? []), candidate]);
 		}
 	}
-	pairsWithin(
-		byName,
-		(name) => `name:${name}`,
-		(a, b) => {
-			const pair = sortedPair(a.id, b.id).join(" ");
-			if (strong.has(pair)) return;
-			const shown = [a.names[0] ?? "", b.names[0] ?? ""].sort()[0];
-			possible.set(pair, (possible.get(pair) ?? new Set()).add(`same name "${shown}"`));
-		},
-	);
+	for (const [name, members] of [...byName].sort(([a], [b]) => (a < b ? -1 : 1))) {
+		const unique = [...new Map(members.map((m) => [m.id, m])).values()].sort((a, b) =>
+			a.id < b.id ? -1 : 1,
+		);
+		if (unique.length > genericAbove) {
+			sharedKeys.push({ key: `name:${name}`, candidates: unique.length, proposed: false });
+			continue;
+		}
+		for (let i = 0; i < unique.length; i++) {
+			for (let j = i + 1; j < unique.length; j++) {
+				const a = unique[i];
+				const b = unique[j];
+				if (!a || !b || groupOf(a.id) === groupOf(b.id)) continue;
+				const pair = sortedPair(a.id, b.id).join(" ");
+				if (strongPairs.has(pair)) continue;
+				const shown = [a.names[0] ?? "", b.names[0] ?? ""].sort()[0];
+				possible.set(pair, (possible.get(pair) ?? new Set()).add(`same name "${shown}"`));
+			}
+		}
+	}
 
-	const known = new Set(input.pending.map((p) => `${p.kind} ${[...p.ids].sort().join(" ")}`));
 	const all: IdentityProposal[] = [];
-	for (const [pair, { evidence, fromDirectory }] of [...strong].sort(([a], [b]) =>
+	for (const [signature, { ids, evidence, against }] of [...strong].sort(([a], [b]) =>
 		a < b ? -1 : 1,
 	)) {
-		if (known.has(`strong_key ${pair}`)) continue;
+		if (known.has(`strong_key ${signature}`)) continue;
 		all.push({
-			ids: pair.split(" "),
+			ids,
 			kind: "strong_key",
 			evidenceFor: [...evidence].sort(),
-			evidenceAgainst: fromDirectory ? [SELF_DECLARED_LINKS] : [],
+			evidenceAgainst: [...against].sort(),
 			proposedAt: input.today,
 		});
 	}
@@ -294,12 +306,6 @@ export function proposeIdentityLinksWithReport(input: {
 	}
 	const limit = Math.max(0, maxProposals);
 	return { proposals: all.slice(0, limit), sharedKeys, omitted: Math.max(0, all.length - limit) };
-}
-
-export function proposeIdentityLinks(
-	input: Parameters<typeof proposeIdentityLinksWithReport>[0],
-): IdentityProposal[] {
-	return [...proposeIdentityLinksWithReport(input).proposals];
 }
 
 export interface ProjectGroup {
@@ -371,7 +377,7 @@ export class ProjectIndex {
 		}
 		for (const alias of input.aliases) this.aliasTargets.set(alias.from, alias.to);
 		for (const alias of input.aliases) this.followAliases(alias.from);
-		for (const proposal of input.pending) {
+		for (const proposal of input.pending.filter((p) => p.kind === "possible")) {
 			const projectIds = [...new Set(proposal.ids.map((id) => this.projectIdOf(id)))];
 			for (const a of projectIds) {
 				for (const b of projectIds) {
@@ -479,7 +485,7 @@ export function collapseToProjectsWithReport(
 		results: ordered.map(([projectId, { score, matched }]) => ({
 			projectId,
 			score,
-			matchedOccurrenceIds: [...new Set(matched)],
+			matchedOccurrenceIds: [...new Set(matched)].sort(),
 			possibleSameAs: index.possibleSameAs(projectId, inAnswer),
 			directoryOnly: !index.isReviewed(projectId),
 		})),
