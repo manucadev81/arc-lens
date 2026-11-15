@@ -589,6 +589,46 @@ describe("proposal explosion guards", () => {
 		expect(proposals.map((p) => p.kind)).toEqual(["strong_key"]);
 	});
 
+	it("never proposes a possible link between members of a strong group over 50", () => {
+		const records = [
+			...many(60, { repository: "https://github.com/template/arc-starter" }),
+			hack("x1", "nova", "Nova", { repository: "https://github.com/template/arc-starter" }),
+			hack("x2", "nova", "Nova", { repository: "https://github.com/template/arc-starter" }),
+		];
+		const report = proposeIdentityLinks({
+			records,
+			directoryEntries: [],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+		});
+		expect(report.proposals).toEqual([]);
+		expect(report.sharedKeys).toEqual([
+			{ key: "repo:github.com/template/arc-starter", candidates: 62, proposed: false },
+		]);
+		const index = new ProjectIndex({
+			records,
+			projects: [],
+			aliases: [],
+			pending: [...report.proposals],
+		});
+		expect(index.possibleSameAs(records[60]?.id ?? "")).toEqual([]);
+	});
+
+	it("still proposes a possible link for the same name when the strong keys differ", () => {
+		const a = hack("x1", "nova", "Nova", { repository: "https://github.com/alpha/nova" });
+		const b = hack("x2", "nova", "Nova", { repository: "https://github.com/beta/nova" });
+		expect(
+			propose({
+				records: [a, b],
+				directoryEntries: [],
+				projects: [],
+				pending: [],
+				today: "2026-11-18",
+			}).map((p) => p.kind),
+		).toEqual(["possible"]);
+	});
+
 	it("exposes omitted proposals in the public result", () => {
 		const records = Array.from({ length: 20 }, (_, i) => [
 			hack("e1", `a${i}`, `Alpha ${i}`, { repository: `https://github.com/team/app-${i}` }),

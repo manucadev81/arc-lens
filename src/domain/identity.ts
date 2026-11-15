@@ -244,14 +244,10 @@ export function proposeIdentityLinks(input: {
 		if (ids.length > genericAbove) current.against.add(genericLinkWarning(ids.length));
 		strong.set(signature, current);
 	}
-	const strongPairs = new Set<string>();
-	for (const { ids } of strong.values()) {
-		for (let i = 0; i < ids.length; i++) {
-			for (let j = i + 1; j < ids.length; j++) {
-				strongPairs.add(`${ids[i]} ${ids[j]}`);
-			}
-		}
-	}
+	const shareStrongKey = (a: Candidate, b: Candidate) => {
+		const keysOfB = new Set(b.keys.map((k) => k.key));
+		return a.keys.some((k) => keysOfB.has(k.key));
+	};
 
 	const possible = new Map<string, Set<string>>();
 	const byName = new Map<string, Candidate[]>();
@@ -274,7 +270,7 @@ export function proposeIdentityLinks(input: {
 				const b = unique[j];
 				if (!a || !b || groupOf(a.id) === groupOf(b.id)) continue;
 				const pair = sortedPair(a.id, b.id).join(" ");
-				if (strongPairs.has(pair)) continue;
+				if (shareStrongKey(a, b)) continue;
 				const shown = [a.names[0] ?? "", b.names[0] ?? ""].sort()[0];
 				possible.set(pair, (possible.get(pair) ?? new Set()).add(`same name "${shown}"`));
 			}
