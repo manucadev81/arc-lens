@@ -169,6 +169,22 @@ describe("dataset validation", () => {
 		);
 	});
 
+	it("rejects the same Registrai entry in two confirmed projects", () => {
+		const files = fixture();
+		const projects = files.projects as Json[];
+		projects.push({
+			id: "proj:sample-escrow",
+			name: "Sample Escrow",
+			occurrences: ["hack:sample-hack-2026:sample-escrow"],
+			registraiSlug: "sample-market",
+			evidence: ["synthetic"],
+			confirmedAt: "2026-11-12",
+		});
+		expect(messages(files)).toContain(
+			'projects.json/1/registraiSlug: "sample-market" already belongs to "proj:sample-market"',
+		);
+	});
+
 	it("rejects reusing a retired identifier", () => {
 		const files = fixture();
 		firstRecord(files).id = "hack:sample-hack-2026:samplemarket";

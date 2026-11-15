@@ -96,6 +96,7 @@ describe("recorded directory isolation", () => {
 		categories: ["payments"],
 		status: "active",
 		url: "https://example.com/sample",
+		links: ["https://github.com/example/sample"],
 	};
 
 	it("is not affected by mutating the constructor maps or entries", async () => {

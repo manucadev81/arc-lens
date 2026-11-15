@@ -230,9 +230,23 @@ function validateDataset(validators: Validators, files: DatasetFiles): DatasetIs
 	const projectIds = new Set<string>();
 	if (projectsOk) {
 		const owner = new Map<string, string>();
-		(files.projects as { id: string; occurrences: string[] }[]).forEach((project, index) => {
+		const slugOwner = new Map<string, string>();
+		(
+			files.projects as { id: string; occurrences: string[]; registraiSlug: string | null }[]
+		).forEach((project, index) => {
 			const path = `/${index}`;
 			scan("projects.json", path, project, SCAN_POLICIES.project);
+			if (project.registraiSlug !== null) {
+				const other = slugOwner.get(project.registraiSlug);
+				if (other !== undefined) {
+					add(
+						"projects.json",
+						`${path}/registraiSlug`,
+						`"${project.registraiSlug}" already belongs to "${other}"`,
+					);
+				}
+				slugOwner.set(project.registraiSlug, project.id);
+			}
 			if (projectIds.has(project.id))
 				add("projects.json", `${path}/id`, `duplicate id "${project.id}"`);
 			projectIds.add(project.id);
