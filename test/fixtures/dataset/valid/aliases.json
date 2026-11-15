@@ -1,0 +1,14 @@
+[
+	{
+		"from": "hack:sample-hack-2026:samplemarket",
+		"to": "hack:sample-hack-2026:sample-market",
+		"reason": "renamed",
+		"at": "2026-11-11"
+	},
+	{
+		"from": "proj:old-sample-market",
+		"to": "proj:sample-market",
+		"reason": "merged",
+		"at": "2026-11-12"
+	}
+]

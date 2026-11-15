@@ -1,0 +1,9 @@
+[
+	{
+		"ids": ["hack:sample-hack-2026:sample-escrow", "registrai:sample-escrow"],
+		"kind": "possible",
+		"evidenceFor": ["same name"],
+		"evidenceAgainst": ["no shared repository or domain"],
+		"proposedAt": "2026-11-12"
+	}
+]

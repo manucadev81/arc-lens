@@ -1,0 +1,7 @@
+{
+	"categories": [
+		{ "id": "agent-payments", "label": "Agent payments", "description": "Synthetic category." },
+		{ "id": "data-markets", "label": "Data markets", "description": "Synthetic category." }
+	],
+	"registraiCategories": { "Payments": "agent-payments" }
+}

@@ -1,0 +1,54 @@
+[
+	{
+		"id": "sample-showcase",
+		"name": "Sample showcase",
+		"kind": "hackathon",
+		"events": ["sample-hack-2026"],
+		"termsUrl": "https://example.com/terms",
+		"termsCheck": {
+			"result": "allowed",
+			"checkedAt": "2026-11-15",
+			"notes": "Synthetic source for tests."
+		},
+		"method": "collector"
+	},
+	{
+		"id": "sample-grants",
+		"name": "Sample grants",
+		"kind": "grant",
+		"events": [],
+		"termsUrl": null,
+		"termsCheck": {
+			"result": "allowed",
+			"checkedAt": "2026-11-15",
+			"notes": "Synthetic manual source for tests."
+		},
+		"method": "manual"
+	},
+	{
+		"id": "sample-pending",
+		"name": "Sample pending",
+		"kind": "hackathon",
+		"events": [],
+		"termsUrl": "https://example.com/pending-terms",
+		"termsCheck": {
+			"result": "pending",
+			"checkedAt": "2026-11-15",
+			"notes": ""
+		},
+		"method": "collector"
+	},
+	{
+		"id": "sample-forbidden",
+		"name": "Sample forbidden",
+		"kind": "hackathon",
+		"events": [],
+		"termsUrl": "https://example.com/forbidden-terms",
+		"termsCheck": {
+			"result": "forbidden",
+			"checkedAt": "2026-11-15",
+			"notes": "Terms forbid automated reading."
+		},
+		"method": "collector"
+	}
+]

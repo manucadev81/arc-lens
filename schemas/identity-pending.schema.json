@@ -1,0 +1,28 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:identity-pending",
+	"type": "array",
+	"items": {
+		"type": "object",
+		"additionalProperties": false,
+		"required": ["ids", "kind", "evidenceFor", "evidenceAgainst", "proposedAt"],
+		"properties": {
+			"ids": {
+				"type": "array",
+				"minItems": 2,
+				"uniqueItems": true,
+				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/anyId" }
+			},
+			"kind": { "enum": ["strong_key", "possible"] },
+			"evidenceFor": {
+				"type": "array",
+				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/shortText" }
+			},
+			"evidenceAgainst": {
+				"type": "array",
+				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/shortText" }
+			},
+			"proposedAt": { "$ref": "urn:arc-lens:schema:common#/$defs/date" }
+		}
+	}
+}

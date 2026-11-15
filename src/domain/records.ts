@@ -4,7 +4,7 @@ export type RecordKind = "hackathon_project" | "grant_recipient";
 
 export type PrizeOutcome = "winner" | "not_winner" | "unknown";
 
-export type ProjectStatusValue = "live" | "inactive" | "unknown";
+export type ProjectStatusValue = "live" | "not_live" | "unknown";
 
 export interface StatusEvidence {
 	readonly signal: string;

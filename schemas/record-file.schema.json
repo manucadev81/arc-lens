@@ -1,0 +1,11 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:record-file",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["sourceId", "records"],
+	"properties": {
+		"sourceId": { "$ref": "urn:arc-lens:schema:common#/$defs/slug" },
+		"records": { "type": "array", "items": { "$ref": "urn:arc-lens:schema:record" } }
+	}
+}

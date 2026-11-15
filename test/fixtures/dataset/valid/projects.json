@@ -1,0 +1,13 @@
+[
+	{
+		"id": "proj:sample-market",
+		"name": "Sample Market",
+		"occurrences": [
+			"hack:sample-hack-2026:sample-market",
+			"grant:sample-cohort-2026:sample-market"
+		],
+		"registraiSlug": "sample-market",
+		"evidence": ["same repository github.com/example/sample-market"],
+		"confirmedAt": "2026-11-12"
+	}
+]

@@ -1,0 +1,29 @@
+{
+	"sourceId": "sample-grants",
+	"records": [
+		{
+			"id": "grant:sample-cohort-2026:sample-market",
+			"kind": "grant_recipient",
+			"name": "Sample Market",
+			"aliases": [],
+			"description": "Grant for the same data market team, 1,000,000 requests served.",
+			"categories": ["data-markets"],
+			"event": null,
+			"grant": { "program": "Sample Grants", "cohort": "Cohort 1", "date": "2026-10-01" },
+			"prize": "unknown",
+			"links": {
+				"demo": null,
+				"repository": "https://github.com/example/sample-market",
+				"website": null
+			},
+			"source": {
+				"id": "sample-grants",
+				"url": "https://example.com/grants/cohort-1",
+				"dataDate": "2026-10-02"
+			},
+			"status": { "value": "unknown", "checkedAt": "2026-10-02", "evidence": [] },
+			"firstSeen": "2026-10-02",
+			"updatedAt": "2026-10-02"
+		}
+	]
+}
