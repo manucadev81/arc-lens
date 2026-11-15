@@ -7,7 +7,7 @@
 
 ## Context
 
-Product proposed three tools (`search_similar_projects`, `get_category_gaps`, `lookup_project`), the answer structure and the texts. Agents pick tools from their names and descriptions, and need stable identifiers to choose among several matches (F3). A person and an agent must get the same facts (US-08).
+Product proposed three tools (`search_similar_projects`, `get_category_gaps`, `lookup_project`), the answer structure and the texts. Agents pick tools from their names and descriptions, and need stable identifiers to choose among several matches (F3). A person and an agent must get the same facts (US-08). One project can appear in several sources, and answers count projects, not appearances (`03-architecture.md` section 5.6).
 
 ## Decision
 
@@ -19,53 +19,72 @@ All three tools have the annotations `readOnlyHint: true`, `destructiveHint: fal
 
 ### Identifiers
 
-Format: `<kind>:<scope>:<slug>` for dataset records and `registrai:<slug>` for directory entries.
+Two levels:
 
-| Kind | Scope | Example |
+- **Occurrence id**: one hackathon record, one grant record or one Registrai entry.
+- **Project id**: a confirmed group of occurrences (`data/projects.json`). An occurrence in no confirmed project is a project on its own, and its project id is its occurrence id.
+
+| Kind | Level | Example |
 |---|---|---|
-| `hack` | event id | `hack:ethglobal-cannes-2026:examplemarket` |
-| `grant` | program and cohort | `grant:circle-2026:examplepay` |
-| `registrai` | none | `registrai:exampledex` |
+| `hack` | occurrence | `hack:ethglobal-cannes-2026:examplemarket` |
+| `grant` | occurrence | `grant:circle-2026:examplepay` |
+| `registrai` | occurrence | `registrai:exampledex` |
+| `proj` | project | `proj:examplemarket` |
 
 - Each segment matches `[a-z0-9]+(-[a-z0-9]+)*`; the whole id is at most 120 characters.
-- The slug comes from the source's own identifier for the project (the path of its page), not from its position in a list, so it survives a refresh.
+- The slug of an occurrence comes from the source's own identifier for the project (the path of its page), not from its position in a list, so it survives a refresh.
 - A duplicate slug in the same scope gets `-2`, `-3`.
-- An id is never reused. A renamed or merged record keeps a line in `data/aliases.json` from the old id to the new one; `lookup_project` resolves it.
+- An id is never reused. A renamed or merged record or project keeps a line in `data/aliases.json` from the old id to the new one.
 - `registrai:` ids use Registrai's own slug and are as stable as Registrai keeps them.
+- `lookup_project` accepts any of these ids. An occurrence id that belongs to a confirmed project returns the project card.
 
-Full regex: `^(hack|grant):[a-z0-9]+(-[a-z0-9]+)*:[a-z0-9]+(-[a-z0-9]+)*$|^registrai:[a-z0-9]+(-[a-z0-9]+)*$`
+Regex: `^(hack|grant):[a-z0-9]+(-[a-z0-9]+)*:[a-z0-9]+(-[a-z0-9]+)*$|^(registrai|proj):[a-z0-9]+(-[a-z0-9]+)*$`
 
 ### Shared output types
 
 ```json
 {
   "$defs": {
-    "projectCard": {
+    "occurrence": {
       "type": "object",
-      "required": ["id", "name", "type", "prizeOrGrant", "status", "description", "source"],
+      "required": ["id", "kind", "prizeOrGrant", "source"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" },
-        "similarity": { "enum": ["high", "medium", "low"] },
-        "type": {
-          "type": "object",
-          "required": ["kind"],
-          "additionalProperties": false,
-          "properties": {
-            "kind": { "enum": ["hackathon_project", "grant_recipient", "directory_entry"] },
-            "context": { "type": ["string", "null"] }
-          }
-        },
+        "kind": { "enum": ["hackathon_project", "grant_recipient", "directory_entry"] },
+        "context": { "type": ["string", "null"] },
         "prizeOrGrant": {
           "type": "object",
           "required": ["value"],
           "additionalProperties": false,
           "properties": {
-            "value": { "enum": ["winner", "not_winner", "unknown", "grant"] },
+            "value": { "enum": ["winner", "not_winner", "unknown", "grant", "not_applicable"] },
             "grantDate": { "type": ["string", "null"] }
           }
         },
+        "source": {
+          "type": "object",
+          "required": ["name", "url", "dataDate"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "url": { "type": "string", "format": "uri" },
+            "dataDate": { "type": "string", "format": "date" }
+          }
+        }
+      }
+    },
+    "projectCard": {
+      "type": "object",
+      "required": ["id", "name", "occurrences", "status", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "similarity": { "enum": ["high", "medium", "low", "keyword_match"] },
+        "exactName": { "type": "boolean" },
+        "occurrences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/occurrence" } },
+        "possibleSameAs": { "type": "array", "items": { "type": "string" } },
         "status": {
           "type": "object",
           "required": ["value", "evidence"],
@@ -84,30 +103,35 @@ Full regex: `^(hack|grant):[a-z0-9]+(-[a-z0-9]+)*:[a-z0-9]+(-[a-z0-9]+)*$|^regis
             "usdLast7Days": { "type": "number" },
             "fromRegistrai": { "const": true }
           }
-        },
-        "source": {
-          "type": "object",
-          "required": ["name", "url", "dataDate"],
-          "additionalProperties": false,
-          "properties": {
-            "name": { "type": "string" },
-            "url": { "type": "string", "format": "uri" },
-            "dataDate": { "type": "string", "format": "date" }
-          }
         }
       }
     },
     "coverage": {
       "type": "object",
-      "required": ["searched", "notSearched", "datasetUpdated", "stale"],
+      "required": ["searched", "partiallySearched", "notSearched", "datasetUpdated", "stale"],
       "additionalProperties": false,
       "properties": {
         "searched": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["source", "date"],
-            "properties": { "source": { "type": "string" }, "date": { "type": "string", "format": "date" } }
+            "required": ["source"],
+            "additionalProperties": false,
+            "properties": {
+              "source": { "type": "string" },
+              "dataDate": { "type": "string", "format": "date" },
+              "fetchedAt": { "type": "string", "format": "date-time" },
+              "fromCache": { "type": "boolean" },
+              "stale": { "type": "boolean" }
+            }
+          }
+        },
+        "partiallySearched": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source", "reason"],
+            "properties": { "source": { "type": "string" }, "reason": { "enum": ["deadline"] } }
           }
         },
         "notSearched": {
@@ -138,7 +162,10 @@ Full regex: `^(hack|grant):[a-z0-9]+(-[a-z0-9]+)*:[a-z0-9]+(-[a-z0-9]+)*$|^regis
 }
 ```
 
-`attribution` is an object whenever any card or count in the answer came from Registrai, and `null` otherwise (BR2).
+- Dataset sources in `searched` carry `dataDate` (and `stale: true` when that source is more than 14 days older than the dataset); Registrai carries `fetchedAt` and `fromCache`.
+- Semantic matching unavailable appears as `{ "source": "semantic matching", "reason": "model_unavailable" }` in `notSearched`.
+- `attribution` is an object whenever any card, occurrence or count in the answer came from Registrai, and `null` otherwise (BR2).
+- `possibleSameAs` lists other project ids in the same answer that may be the same project (unconfirmed link).
 
 ### `search_similar_projects`
 
@@ -156,7 +183,11 @@ Input:
 }
 ```
 
-Output `structuredContent`: `{ "summary": string, "results": projectCard[], "coverage": coverage, "attribution": attribution }`. Every card has `similarity`. Order: fused rank (ADR-0002).
+Output `structuredContent`: `{ "summary": string, "searchMode": "hybrid" | "keyword_only", "complete": boolean, "results": projectCard[], "coverage": coverage, "attribution": attribution }`.
+
+- Every card has `similarity`: `high`, `medium` or `low` in hybrid mode; `keyword_match` in keyword-only mode.
+- `complete` is `false` when semantic matching was unavailable or Registrai was not or only partially searched.
+- `limit` counts projects. Order: fused rank, ties by id (ADR-0002).
 
 ### `get_category_gaps`
 
@@ -174,7 +205,12 @@ Input:
 
 Output without `category`: `{ "summary": string, "categories": [{ "id", "label", "projectCount" }], "coverage", "attribution" }`.
 
-Output with `category`: `{ "summary": string, "category": { "id": string | null, "label": string, "matchedBy": "known" | "free_text" }, "verdict": "several" | "few" | "none", "results": projectCard[], "coverage", "attribution" }`. `summary` is exactly T-04, T-05 or T-06.
+Output with `category`: `{ "summary": string, "category": { "id": string | null, "label": string, "matchedBy": "known" | "free_text" | "unresolved" }, "verdict": "several" | "few" | "none" | null, "projectCount": integer, "uncertainLinks": integer, "results": projectCard[], "categories": [...], "coverage", "attribution" }`.
+
+- `projectCount` counts projects (section 5.6 of `03-architecture.md`); `uncertainLinks` is the number of `possible` pairs among them.
+- `summary` is T-04, T-05 or T-06, plus T-19 when merging the uncertain pairs would change the verdict.
+- `verdict` is `null` and `matchedBy` is `unresolved` when a free-text category cannot be resolved because semantic matching is unavailable; the answer then lists the known categories with T-18.
+- At most 20 cards are returned, ordered by name.
 
 ### `lookup_project`
 
@@ -194,7 +230,7 @@ Input:
 
 When both are given, `id` wins.
 
-Output: `{ "summary": string, "match": "one" | "several" | "none", "results": projectCard[], "candidates": [{ "id", "name", "type", "sourceName" }], "statusEvidence": [{ "signal", "result", "at" }], "coverage", "attribution" }`. `results` has one card when `match` is `one`; `candidates` is filled when `match` is `several`.
+Output: `{ "summary": string, "match": "one" | "several" | "none", "results": projectCard[], "candidates": [{ "id", "name", "occurrenceCount", "firstSourceName" }], "statusEvidence": [{ "signal", "result", "at" }], "coverage", "attribution" }`. `results` has one card when `match` is `one`; `candidates` is filled when `match` is `several`, one per project.
 
 ### Errors
 
@@ -202,10 +238,11 @@ Input that fails the schema, an idea under 10 characters, or an unknown id are r
 
 ### Text content
 
-Each result also has one text content block with the answer in the Product format (sections 4 and 6 of `02-product.md`), built from the same object as `structuredContent`. A snapshot test per Product example (6.1 to 6.4) guards the format.
+Each result also has one text content block with the answer in the Product format (sections 4 and 6 of `02-product.md`), built from the same object as `structuredContent`. A project with several occurrences shows one `Type` line per occurrence, each with its prize or grant and source; the final layout is a Product decision (A-07 in `03-architecture.md`). A snapshot test per Product example (6.1 to 6.4) and per new case (keyword-only, unresolved category, possible duplicate) guards the format.
 
 ## Consequences
 
-- Good: agents get typed, validated data; people get the same facts as text; ids survive refreshes and renames.
+- Good: agents get typed, validated data; people get the same facts as text; ids survive refreshes, renames and the grouping of occurrences into projects.
 - Bad: two renderings of every answer must stay in sync; mitigated by building the text from the structured object only.
+- The card changes from one source per card to a list of occurrences; Product must confirm the text layout (A-07).
 - If a future MCP revision changes how `structuredContent` or `outputSchema` work, only the MCP adapter changes.

@@ -23,7 +23,9 @@ Option 4.
 - **Model**: a quantized multilingual MiniLM sentence-embedding model (for example `paraphrase-multilingual-MiniLM-L12-v2` in ONNX form), 384 dimensions, pinned by revision. Multilingual, so a Portuguese idea matches English records. Downloaded on first use and cached by `transformers.js`; file hashes checked. The exact model and its download size are confirmed by Engineering against the eval set.
 - **Record text embedded**: `name`, `description`, category labels and event or cohort name.
 - **Keyword index**: BM25 over `name`, `aliases`, `description` and category labels, with an in-memory library such as MiniSearch.
-- **Fusion**: reciprocal rank fusion of the semantic and keyword rankings, `score = Σ 1 / (60 + rank)`. The order of results follows the fused score.
+- **Candidate universe**: both rankings are computed over the same set: every dataset occurrence plus the Registrai entries fetched within the deadline (only the embedded ones take part in the semantic ranking). Rank positions from one source are never compared with positions from another.
+- **Fusion**: reciprocal rank fusion of the two rankings of that common set, `score = Σ 1 / (60 + rank)`. Ties break by higher cosine, then higher BM25 score, then id in ascending order, so the same input always gives the same order.
+- **Projects, not occurrences**: after fusion, occurrences of the same confirmed project collapse into one result with the best score of its occurrences; `limit` counts projects (`03-architecture.md` section 5.6).
 - **Labels** (Product: High, Medium, Low), from the cosine similarity of the semantic part, with provisional thresholds calibrated on the eval set:
   - High: cosine ≥ 0.60
   - Medium: 0.45 to below 0.60
@@ -32,6 +34,7 @@ Option 4.
 - **Noise floor (Q9)**: results whose cosine is below 0.25 **and** that have no keyword hit are not shown. Everything above the floor within `limit` is shown and labeled, never hidden (US-05). The floor is set as the highest value that keeps recall at 10 at or above 0.90 on the eval set.
 - **Default and maximum (Q11)**: 5 results by default, 10 at most.
 - **Registrai entries** are ranked with the same method, using their name and summary, embedded at query time and cached in memory (ADR-0005).
+- **Keyword-only mode**: when the model is unavailable (download or load failed, still loading after 3 seconds, or a mismatch with the index), ranking uses BM25 only over the same candidate universe; a candidate needs at least one matching query term. No cosine value is invented: results carry `similarity: "keyword_match"` (and `exactName: true` for exact name or alias matches), the answer declares `searchMode: "keyword_only"` and `complete: false`, and an empty result uses the incomplete-search text T-17, never the "no similar projects" text T-03. Details in `03-architecture.md` section 6.5.
 - **Thresholds live in a versioned config file** (`config/similarity.json`), not in code, and change only with an eval run attached to the pull request.
 
 ## Consequences

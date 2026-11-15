@@ -19,7 +19,7 @@ The dataset is small (hundreds of records), must be open and reusable (US-13), m
 
 Option 1.
 
-- **Files**: `data/records/<source-id>.json`, `data/sources.json`, `data/categories.json`, `data/aliases.json`, `data/manifest.json` (fields in section 5 of `03-architecture.md`).
+- **Files**: `data/records/<source-id>.json`, `data/sources.json`, `data/categories.json`, `data/aliases.json`, `data/projects.json`, `data/identity-pending.json`, `data/manifest.json` (fields in section 5 of `03-architecture.md`).
 - **Schemas**: `schemas/*.schema.json` (JSON Schema 2020-12), `additionalProperties: false` on records. A CI job validates every file on every pull request.
 - **Search index**: built by the release workflow from the JSON files and shipped in the npm package; not committed.
 - **Refresh** (`npm run refresh`, run locally or by the `refresh` GitHub Actions workflow on a weekly schedule and on demand):
@@ -27,8 +27,9 @@ Option 1.
   2. Validate the candidate: schema, personal-data checks, and record count at least 80% of the previous file.
   3. If valid, replace the source file, keeping `firstSeen` and `id` of existing records; compute status signals (ADR-0006).
   4. If invalid or the collector failed, keep the previous file and record the reason.
-  5. Write `manifest.json` (per-source data dates and counts) and the refresh report (Product 6.5).
-  6. Open a pull request titled `Data refresh YYYY-MM-DD` with the report as its body.
+  5. Propose identity links for new or changed occurrences by strong keys (same normalized repository URL, same website domain, or a Registrai entry whose links contain them) into `identity-pending.json`; same-name occurrences without a strong key are added as `possible`. Nothing is added to `projects.json` automatically.
+  6. Write `manifest.json` (per-source data dates and counts; a source whose previous file was kept keeps its previous data date) and the refresh report (Product 6.5), which also lists identity proposals and sources with retained older data.
+  7. Open a pull request titled `Data refresh YYYY-MM-DD` with the report as its body. The maintainer confirms identity links by moving them from `identity-pending.json` to `projects.json` in that pull request.
 - **Publication**: nothing reaches users until the maintainer merges the pull request; the merge triggers the release workflow, which checks the eval gate (ADR-0002), builds the index and publishes the npm package with provenance.
 - **Community corrections**: a wrong or missing project is reported through an issue template (Product F4); a fix is a normal pull request to the JSON file.
 

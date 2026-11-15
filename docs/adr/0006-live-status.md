@@ -29,7 +29,7 @@ Evaluated in this order; the first rule that applies decides:
 4. Demo `fails` or no demo link, **and** repository `archived`, `not found`, or last commit older than 365 days → **Not live**.
 5. Anything else, including Registrai `deployed` without other signals → **Unknown**.
 
-Evidence always lists every signal read, with its date, for example `demo responds 2026-11-10; last commit 2026-11-02`. Signals that could not be read are listed as such.
+Status is computed once per project (`03-architecture.md` section 5.6), over the signals of all its occurrences together: the Registrai status of the project's `registraiSlug`, the best demo result and the most recent commit among its occurrences. Evidence always lists every signal read, with its date, for example `demo responds 2026-11-10; last commit 2026-11-02`. Signals that could not be read are listed as such.
 
 ### Limits
 
