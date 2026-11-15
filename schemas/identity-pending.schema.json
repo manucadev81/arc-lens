@@ -11,18 +11,29 @@
 				"type": "array",
 				"minItems": 2,
 				"uniqueItems": true,
-				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/anyId" }
+				"items": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/anyId"
+				},
+				"maxItems": 50
 			},
-			"kind": { "enum": ["strong_key", "possible"] },
+			"kind": {
+				"enum": ["strong_key", "possible"]
+			},
 			"evidenceFor": {
 				"type": "array",
-				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/shortText" }
+				"items": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+				}
 			},
 			"evidenceAgainst": {
 				"type": "array",
-				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/shortText" }
+				"items": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+				}
 			},
-			"proposedAt": { "$ref": "urn:arc-lens:schema:common#/$defs/date" }
+			"proposedAt": {
+				"$ref": "urn:arc-lens:schema:common#/$defs/date"
+			}
 		}
 	}
 }

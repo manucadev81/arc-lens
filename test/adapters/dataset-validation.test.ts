@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readDatasetFiles, readSchemas } from "../../src/adapters/dataset/files.js";
 import { createDatasetValidator, type DatasetFiles } from "../../src/adapters/dataset/validate.js";
+import { DEFAULT_MAX_GROUP_SIZE } from "../../src/domain/index.js";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const validFixture = path.join(root, "test/fixtures/dataset/valid");
@@ -203,6 +204,18 @@ describe("dataset validation", () => {
 		const found = messages(files);
 		expect(found).toContain("aliases.json/2/to: alias chain has a cycle");
 		expect(found).toContain('aliases.json/4/to: unknown target "proj:nowhere"');
+	});
+
+	it("caps identity proposals at 50 ids, matching the proposal group limit", () => {
+		const files = fixture();
+		const proposal = (files.identityPending as Json[])[0] as Json;
+		proposal.ids = Array.from({ length: 50 }, (_, i) => `registrai:entry-${i}`);
+		expect(messages(files)).toEqual([]);
+		proposal.ids.push("registrai:entry-50");
+		expect(messages(files)).toContain(
+			"identity-pending.json/0/ids: must NOT have more than 50 items",
+		);
+		expect(DEFAULT_MAX_GROUP_SIZE).toBe(50);
 	});
 
 	it("rejects identity proposals with unknown ids", () => {
