@@ -93,7 +93,7 @@ Priority: Must = needed for the MVP defined in the idea.
 
 **US-06 (Must). Gaps by category.** As a builder, I want to see what exists on Arc and what does not, by category, so that I can pick an unserved area.
 
-- Given a category, then I get the projects that exist in it and whether the category looks empty or thin.
+- Given a category, then I get the projects found in it and whether no project was found in the covered sources or only a few, always together with the coverage (US-05).
 - Given the gaps answer, then it is ready to use: a person or an agent can quote it without further processing.
 - Given the answer, then it shows the data dates and the coverage it is based on (US-05).
 
@@ -101,6 +101,12 @@ Priority: Must = needed for the MVP defined in the idea.
 
 - Given a project record, then it shows a status (live, not live or unknown) with the evidence used.
 - How a project is decided to be live is Q3.
+
+**US-15 (Must). Look up a project.** As a builder or reviewer, I want to look up a project by name, so that I can read its record directly.
+
+- Given a project name, when I look it up, then I get its record: description, source, source link, data date, winner flag or grant, and status (US-07).
+- Given a name that matches more than one project, then I get the matching candidates to choose from instead of a single guess.
+- Given a name with no match in the covered sources, then the answer says which sources were searched and their data dates, and does not state that the project does not exist (US-05).
 
 ### Epic C: Delivery
 
@@ -139,6 +145,7 @@ Priority: Must = needed for the MVP defined in the idea.
 **US-13 (Must). Publish openly.** As the maintainer, I want the MCP server and dataset published openly, so that the Arc community can use and contribute to them.
 
 - Given the repository, then it is public and the dataset is available under terms that allow reuse, with the sources credited.
+- Given the repository, then the README explains what Arc Lens answers, how to connect an MCP client, a few example questions, the data sources and the required attribution.
 - Given the dataset, then it contains no Registrai records copied beyond what the attribution terms allow (BR3).
 
 **US-14 (Should). Open the collaboration channels.** As the maintainer, I want to propose the collaborations in the hybrid model, so that the project gets a concrete response from the ecosystem (M4).
@@ -191,6 +198,8 @@ Gaps the idea does not answer, to confirm:
 - Q8: what the "categories" for the gaps view are, and who defines them (US-06).
 - Q9: how similarity is judged, and how low a match can be before it is hidden (US-04, US-05).
 - Q10: under what license the dataset is published, given CC BY 4.0 on Registrai and the terms of the other sources (US-13).
+- Q11: how many results a search returns by default and in what order (US-04).
+- Q12: the language of the query and of the answer; the project is in English, but the team may ask in Portuguese (US-04, US-08).
 
 ## 10. Risks that affect requirements
 
