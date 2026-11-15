@@ -6,12 +6,16 @@ import {
 	countProjects,
 	type DatasetRecord,
 	type DirectoryEntry,
+	defaultDirectoryQuota,
 	gapVerdict,
 	type IdentityProposal,
+	isSafeDirectoryLink,
 	normalizeRepositoryUrl,
 	ProjectIndex,
 	projectOccurrences,
 	proposeIdentityLinks,
+	proposeIdentityLinksWithReport,
+	SELF_DECLARED_LINKS,
 	websiteDomain,
 } from "../../src/domain/index.js";
 
@@ -402,5 +406,202 @@ describe("gap verdict thresholds", () => {
 		[5, "several"],
 	])("%s projects is %s", (count, verdict) => {
 		expect(gapVerdict(count)).toBe(verdict);
+	});
+});
+
+describe("proposal explosion guards", () => {
+	const many = (
+		count: number,
+		links: { repository?: string; website?: string },
+		name?: (i: number) => string,
+	) =>
+		Array.from({ length: count }, (_, i) =>
+			hack("bulk-2026", `p${i}`, name ? name(i) : `Project ${i}`, links),
+		);
+
+	it("1,500 records sharing an Arc explorer link produce no proposals", () => {
+		const records = many(1500, { website: "https://testnet.arcscan.app/address/0xabc" });
+		const report = proposeIdentityLinksWithReport({
+			records,
+			directoryEntries: [],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+		});
+		expect(report.proposals).toEqual([]);
+		expect(report.omitted).toBe(0);
+	});
+
+	it("1,500 records sharing a template repository and name are reported as shared keys, not pairs", () => {
+		const records = many(
+			1500,
+			{ repository: "https://github.com/template/arc-starter" },
+			() => "Arc Starter",
+		);
+		const report = proposeIdentityLinksWithReport({
+			records,
+			directoryEntries: [],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+		});
+		expect(report.proposals).toEqual([]);
+		expect(report.sharedKeys).toEqual([
+			{ key: "repo:github.com/template/arc-starter", candidates: 1500 },
+			{ key: "name:arcstarter", candidates: 1500 },
+		]);
+	});
+
+	it("pairs up to three candidates per key and treats a fourth as shared", () => {
+		const three = many(3, { repository: "https://github.com/team/app" });
+		expect(
+			proposeIdentityLinks({
+				records: three,
+				directoryEntries: [],
+				projects: [],
+				pending: [],
+				today: "2026-11-18",
+			}),
+		).toHaveLength(3);
+		const four = many(4, { repository: "https://github.com/team/app" });
+		expect(
+			proposeIdentityLinks({
+				records: four,
+				directoryEntries: [],
+				projects: [],
+				pending: [],
+				today: "2026-11-18",
+			}),
+		).toEqual([]);
+	});
+
+	it("caps proposals per refresh and reports how many were omitted, strong keys first", () => {
+		const records = Array.from({ length: 20 }, (_, i) => [
+			hack("e1", `a${i}`, `Alpha ${i}`, { repository: `https://github.com/team/app-${i}` }),
+			hack("e2", `b${i}`, `Beta ${i}`, { repository: `https://github.com/team/app-${i}` }),
+		]).flat();
+		const report = proposeIdentityLinksWithReport({
+			records,
+			directoryEntries: [],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+			maxProposals: 5,
+		});
+		expect(report.proposals).toHaveLength(5);
+		expect(report.omitted).toBe(15);
+		expect(report.proposals.every((p) => p.kind === "strong_key")).toBe(true);
+	});
+
+	it.each([
+		["https://docs.arc.network/arc/concepts", null],
+		["https://testnet.arcscan.app/tx/0x1", null],
+		["https://faucet.circle.com", null],
+		["https://developers.circle.com/w3s", null],
+		["https://vercel.app", null],
+		["https://myapp.vercel.app", "myapp.vercel.app"],
+		["https://project.arc.example", "project.arc.example"],
+	])("website domain of %s is %s", (url, expected) => {
+		expect(websiteDomain(url)).toBe(expected);
+	});
+});
+
+describe("directory links are self-declared and filtered", () => {
+	const legit = hack("e1", "pay", "Pay", { repository: "https://github.com/legit/pay" });
+
+	it("marks strong keys that rely on a Registrai entry as self-declared", () => {
+		const proposals = proposeIdentityLinks({
+			records: [legit],
+			directoryEntries: [entry("copycat", "Copycat", ["https://github.com/legit/pay"])],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+		});
+		expect(proposals).toEqual([
+			{
+				ids: [legit.id, "registrai:copycat"],
+				kind: "strong_key",
+				evidenceFor: ["same repository github.com/legit/pay"],
+				evidenceAgainst: [SELF_DECLARED_LINKS],
+				proposedAt: "2026-11-18",
+			},
+		]);
+	});
+
+	it("ignores directory links that are not https or carry credentials", () => {
+		for (const link of [
+			"http://github.com/legit/pay",
+			"https://user:secret@github.com/legit/pay",
+			"javascript:alert(1)",
+		]) {
+			const proposals = proposeIdentityLinks({
+				records: [legit],
+				directoryEntries: [entry("other", "Other", [link])],
+				projects: [],
+				pending: [],
+				today: "2026-11-18",
+			});
+			expect(proposals).toEqual([]);
+		}
+		expect(isSafeDirectoryLink("https://github.com/legit/pay")).toBe(true);
+	});
+});
+
+describe("unreviewed directory entries cannot crowd out or inflate results", () => {
+	const reviewed = ["a", "b", "c", "d", "e", "f"].map((slug) =>
+		hack("e1", slug, slug.toUpperCase()),
+	);
+	const index = new ProjectIndex({ records: reviewed, projects: [], aliases: [], pending: [] });
+	const spam = Array.from({ length: 10 }, (_, i) => ({
+		occurrenceId: `registrai:spam-${i}`,
+		score: 0.99,
+	}));
+	const legit = reviewed.map((record, i) => ({ occurrenceId: record.id, score: 0.6 - i * 0.01 }));
+
+	it("allows at most half of the limit for directory-only projects", () => {
+		const top = collapseToProjects([...spam, ...legit], index, 5);
+		expect(top).toHaveLength(5);
+		expect(top.filter((p) => p.directoryOnly)).toHaveLength(2);
+		expect(top.filter((p) => !p.directoryOnly).map((p) => p.projectId)).toEqual(
+			reviewed.slice(0, 3).map((r) => r.id),
+		);
+		expect(defaultDirectoryQuota(5)).toBe(2);
+	});
+
+	it("gives no directory-only slot when the limit is 1, unless the caller sets a quota", () => {
+		expect(collapseToProjects([...spam, ...legit], index, 1).map((p) => p.directoryOnly)).toEqual([
+			false,
+		]);
+		expect(
+			collapseToProjects([...spam, ...legit], index, 1, { directoryQuota: 1 })[0]?.directoryOnly,
+		).toBe(true);
+	});
+
+	it("bases the gap verdict on reviewed projects only", () => {
+		const count = countProjects(
+			[...spam.map((s) => s.occurrenceId), reviewed[0]?.id ?? "", reviewed[1]?.id ?? ""],
+			index,
+		);
+		expect(count).toMatchObject({ count: 2, verdict: "few", mayBeLower: false });
+		expect(count.directoryOnlyIds).toHaveLength(10);
+		expect(
+			countProjects(
+				spam.map((s) => s.occurrenceId),
+				index,
+			),
+		).toMatchObject({ count: 0, verdict: "none" });
+	});
+
+	it("counts a Registrai entry linked to a confirmed project as reviewed", () => {
+		const linked = new ProjectIndex({
+			records: market,
+			projects: [confirmed],
+			aliases: [],
+			pending: [],
+		});
+		expect(countProjects(["registrai:examplemarket"], linked)).toMatchObject({
+			count: 1,
+			directoryOnlyIds: [],
+		});
 	});
 });
