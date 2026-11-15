@@ -3,10 +3,13 @@ import {
 	AliasCycleError,
 	type ConfirmedProject,
 	collapseToProjects,
+	collapseToProjectsWithReport,
 	countProjects,
 	type DatasetRecord,
 	type DirectoryEntry,
 	defaultDirectoryQuota,
+	directoryQuotaNote,
+	gapSummary,
 	gapVerdict,
 	type IdentityProposal,
 	isSafeDirectoryLink,
@@ -603,5 +606,113 @@ describe("unreviewed directory entries cannot crowd out or inflate results", () 
 			count: 1,
 			directoryOnlyIds: [],
 		});
+	});
+});
+
+describe("gap summary never implies a false absence", () => {
+	const reviewed = ["a", "b"].map((slug) => hack("e1", slug, slug.toUpperCase()));
+	const index = new ProjectIndex({ records: reviewed, projects: [], aliases: [], pending: [] });
+	const directory = (n: number) => Array.from({ length: n }, (_, i) => `registrai:entry-${i}`);
+
+	it("10 directory entries and 2 reviewed projects give few, T-05 and T-21", () => {
+		const count = countProjects([...directory(10), ...reviewed.map((r) => r.id)], index);
+		expect(count).toMatchObject({ count: 2, directoryOnlyCount: 10, verdict: "few" });
+		expect(gapSummary(count)).toEqual([
+			{ id: "T-05", text: "Only a few projects found in this category in the covered sources." },
+			{
+				id: "T-21",
+				text: "10 more entries from the Registrai directory are listed but not reviewed, so they are not counted.",
+			},
+		]);
+	});
+
+	it("0 reviewed projects and 3 directory entries give none with T-22, never T-06", () => {
+		const count = countProjects(directory(3), index);
+		expect(count).toMatchObject({ count: 0, directoryOnlyCount: 3, verdict: "none" });
+		const summary = gapSummary(count);
+		expect(summary).toEqual([
+			{
+				id: "T-22",
+				text: "No reviewed project found in this category. 3 Registrai directory entries were found but are not reviewed; they are listed below.",
+			},
+		]);
+		expect(summary.some((line) => line.id === "T-06")).toBe(false);
+	});
+
+	it("nothing at all gives T-06", () => {
+		expect(gapSummary(countProjects([], index))).toEqual([
+			{
+				id: "T-06",
+				text: "No project found in this category in the covered sources. This does not mean that nobody has built something in this area.",
+			},
+		]);
+	});
+
+	it("a Registrai entry linked to a confirmed project counts as reviewed", () => {
+		const linked = new ProjectIndex({
+			records: market,
+			projects: [confirmed],
+			aliases: [],
+			pending: [],
+		});
+		const count = countProjects(["registrai:examplemarket"], linked);
+		expect(count).toMatchObject({ count: 1, directoryOnlyCount: 0, verdict: "few" });
+		expect(gapSummary(count).map((line) => line.id)).toEqual(["T-05"]);
+	});
+
+	it("several reviewed projects add T-19 when merging could lower the verdict and T-21 for directory entries", () => {
+		const five = ["a", "b", "c", "d"].map((slug) => hack("e2", slug, slug.toUpperCase()));
+		const twin = hack("e3", "a", "A");
+		const records = [...five, twin];
+		const pending = proposeIdentityLinks({
+			records,
+			directoryEntries: [],
+			projects: [],
+			pending: [],
+			today: "2026-11-18",
+		});
+		const withTwin = new ProjectIndex({ records, projects: [], aliases: [], pending });
+		const count = countProjects([...records.map((r) => r.id), ...directory(1)], withTwin);
+		expect(gapSummary(count).map((line) => line.id)).toEqual(["T-04", "T-19", "T-21"]);
+	});
+});
+
+describe("the directory quota never hides matches silently", () => {
+	const reviewed = ["a", "b", "c", "d", "e", "f"].map((slug) =>
+		hack("e1", slug, slug.toUpperCase()),
+	);
+	const index = new ProjectIndex({ records: reviewed, projects: [], aliases: [], pending: [] });
+	const spam = Array.from({ length: 10 }, (_, i) => ({
+		occurrenceId: `registrai:entry-${i}`,
+		score: 0.99,
+	}));
+	const legit = reviewed.map((record, i) => ({ occurrenceId: record.id, score: 0.6 - i * 0.01 }));
+
+	it("reports how many directory matches the quota left out and marks the answer incomplete", () => {
+		const report = collapseToProjectsWithReport([...spam, ...legit], index, 5);
+		expect(report).toMatchObject({
+			droppedByDirectoryQuota: 8,
+			directoryQuota: 2,
+			complete: false,
+		});
+		expect(directoryQuotaNote(report, 5)).toBe(
+			"8 more unreviewed Registrai directory matches were left out, because unreviewed entries are limited to 2 of 5 results.",
+		);
+	});
+
+	it("stays complete with no note when the quota drops nothing", () => {
+		const report = collapseToProjectsWithReport([...spam.slice(0, 2), ...legit], index, 5);
+		expect(report).toMatchObject({ droppedByDirectoryQuota: 0, complete: true });
+		expect(directoryQuotaNote(report, 5)).toBeNull();
+	});
+
+	it("does not count matches that would not fit the limit anyway as dropped by the quota", () => {
+		const lowSpam = Array.from({ length: 4 }, (_, i) => ({
+			occurrenceId: `registrai:low-${i}`,
+			score: 0.1,
+		}));
+		const report = collapseToProjectsWithReport([...legit, ...lowSpam], index, 5);
+		expect(report.results.every((r) => !r.directoryOnly)).toBe(true);
+		expect(report).toMatchObject({ droppedByDirectoryQuota: 0, complete: true });
 	});
 });

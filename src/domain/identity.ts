@@ -433,12 +433,19 @@ export function defaultDirectoryQuota(limit: number): number {
 	return Math.floor(Math.max(0, limit) / 2);
 }
 
-export function collapseToProjects(
+export interface CollapsedResults {
+	readonly results: readonly RankedProject[];
+	readonly droppedByDirectoryQuota: number;
+	readonly directoryQuota: number;
+	readonly complete: boolean;
+}
+
+export function collapseToProjectsWithReport(
 	ranked: readonly RankedOccurrence[],
 	index: ProjectIndex,
 	limit: number,
 	options: { readonly directoryQuota?: number } = {},
-): RankedProject[] {
+): CollapsedResults {
 	const best = new Map<string, { score: number; matched: string[] }>();
 	for (const { occurrenceId, score } of ranked) {
 		const projectId = index.projectIdOf(occurrenceId);
@@ -449,27 +456,51 @@ export function collapseToProjects(
 			if (score > current.score) current.score = score;
 		}
 	}
+	const slots = Math.max(0, limit);
 	const quota = Math.max(0, options.directoryQuota ?? defaultDirectoryQuota(limit));
 	const ordered: [string, { score: number; matched: string[] }][] = [];
 	let directoryUsed = 0;
+	let dropped = 0;
 	for (const entry of [...best].sort(
 		([idA, a], [idB, b]) => b.score - a.score || (idA < idB ? -1 : idA > idB ? 1 : 0),
 	)) {
-		if (ordered.length >= Math.max(0, limit)) break;
+		if (ordered.length >= slots) break;
 		if (!index.isReviewed(entry[0])) {
-			if (directoryUsed >= quota) continue;
+			if (directoryUsed >= quota) {
+				dropped += 1;
+				continue;
+			}
 			directoryUsed += 1;
 		}
 		ordered.push(entry);
 	}
 	const inAnswer = new Set(ordered.map(([projectId]) => projectId));
-	return ordered.map(([projectId, { score, matched }]) => ({
-		projectId,
-		score,
-		matchedOccurrenceIds: [...new Set(matched)],
-		possibleSameAs: index.possibleSameAs(projectId, inAnswer),
-		directoryOnly: !index.isReviewed(projectId),
-	}));
+	return {
+		results: ordered.map(([projectId, { score, matched }]) => ({
+			projectId,
+			score,
+			matchedOccurrenceIds: [...new Set(matched)],
+			possibleSameAs: index.possibleSameAs(projectId, inAnswer),
+			directoryOnly: !index.isReviewed(projectId),
+		})),
+		droppedByDirectoryQuota: dropped,
+		directoryQuota: quota,
+		complete: dropped === 0,
+	};
+}
+
+export function collapseToProjects(
+	ranked: readonly RankedOccurrence[],
+	index: ProjectIndex,
+	limit: number,
+	options: { readonly directoryQuota?: number } = {},
+): RankedProject[] {
+	return [...collapseToProjectsWithReport(ranked, index, limit, options).results];
+}
+
+export function directoryQuotaNote(collapsed: CollapsedResults, limit: number): string | null {
+	if (collapsed.droppedByDirectoryQuota === 0) return null;
+	return `${collapsed.droppedByDirectoryQuota} more unreviewed Registrai directory matches were left out, because unreviewed entries are limited to ${collapsed.directoryQuota} of ${limit} results.`;
 }
 
 export type GapVerdict = "several" | "few" | "none";
@@ -492,6 +523,7 @@ export interface ProjectCount {
 	readonly projectIds: readonly string[];
 	readonly count: number;
 	readonly directoryOnlyIds: readonly string[];
+	readonly directoryOnlyCount: number;
 	readonly minimumIfMerged: number;
 	readonly verdict: GapVerdict;
 	readonly mayBeLower: boolean;
@@ -521,10 +553,55 @@ export function countProjects(
 		projectIds,
 		count: projectIds.length,
 		directoryOnlyIds,
+		directoryOnlyCount: directoryOnlyIds.length,
 		minimumIfMerged,
 		verdict,
 		mayBeLower: gapVerdict(minimumIfMerged, thresholds) !== verdict,
 	};
+}
+
+export const GAP_TEXTS = {
+	several: "Several projects found in this category.",
+	few: "Only a few projects found in this category in the covered sources.",
+	none: "No project found in this category in the covered sources. This does not mean that nobody has built something in this area.",
+	mayBeLower: "Some of these may be the same project (unconfirmed), so the count may be lower.",
+} as const;
+
+export function noneWithDirectoryText(directoryOnlyCount: number): string {
+	return `No reviewed project found in this category. ${directoryOnlyCount} Registrai directory entries were found but are not reviewed; they are listed below.`;
+}
+
+export function directoryNotCountedText(directoryOnlyCount: number): string {
+	return `${directoryOnlyCount} more entries from the Registrai directory are listed but not reviewed, so they are not counted.`;
+}
+
+export type GapTextId = "T-04" | "T-05" | "T-06" | "T-19" | "T-21" | "T-22";
+
+export interface GapSummaryLine {
+	readonly id: GapTextId;
+	readonly text: string;
+}
+
+export function gapSummary(count: ProjectCount): GapSummaryLine[] {
+	const lines: GapSummaryLine[] = [];
+	if (count.verdict === "none") {
+		lines.push(
+			count.directoryOnlyCount > 0
+				? { id: "T-22", text: noneWithDirectoryText(count.directoryOnlyCount) }
+				: { id: "T-06", text: GAP_TEXTS.none },
+		);
+		return lines;
+	}
+	lines.push(
+		count.verdict === "several"
+			? { id: "T-04", text: GAP_TEXTS.several }
+			: { id: "T-05", text: GAP_TEXTS.few },
+	);
+	if (count.mayBeLower) lines.push({ id: "T-19", text: GAP_TEXTS.mayBeLower });
+	if (count.directoryOnlyCount > 0) {
+		lines.push({ id: "T-21", text: directoryNotCountedText(count.directoryOnlyCount) });
+	}
+	return lines;
 }
 
 export interface OccurrenceView {
