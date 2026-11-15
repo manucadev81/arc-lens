@@ -11,22 +11,29 @@ export class RequestCancelledError extends Error {
 export class RecordedDirectory implements EcosystemDirectoryPort {
 	readonly calls: DirectoryQuery[] = [];
 
+	private readonly searches: ReadonlyMap<string, readonly DirectoryEntry[]>;
+	private readonly projects: ReadonlyMap<string, DirectoryEntry>;
+
 	constructor(
-		private readonly searches: ReadonlyMap<string, readonly DirectoryEntry[]>,
-		private readonly projects: ReadonlyMap<string, DirectoryEntry> = new Map(),
-	) {}
+		searches: ReadonlyMap<string, readonly DirectoryEntry[]>,
+		projects: ReadonlyMap<string, DirectoryEntry> = new Map(),
+	) {
+		this.searches = new Map(structuredClone([...searches]));
+		this.projects = new Map(structuredClone([...projects]));
+	}
 
 	async searchProjects(
 		query: DirectoryQuery,
 		options?: DirectoryRequestOptions,
 	): Promise<readonly DirectoryEntry[]> {
 		if (options?.signal?.aborted) throw new RequestCancelledError();
-		this.calls.push(query);
-		return (this.searches.get(query.text) ?? []).slice(0, query.limit);
+		this.calls.push({ ...query });
+		return structuredClone((this.searches.get(query.text) ?? []).slice(0, query.limit));
 	}
 
 	async getProject(id: string, options?: DirectoryRequestOptions): Promise<DirectoryEntry | null> {
 		if (options?.signal?.aborted) throw new RequestCancelledError();
-		return this.projects.get(id) ?? null;
+		const project = this.projects.get(id);
+		return project ? structuredClone(project) : null;
 	}
 }

@@ -51,6 +51,27 @@ describe("domain boundary analysis", () => {
 		expect(reasons(source)).toContain(`uses the global "${name}"`);
 	});
 
+	it.each([
+		["globalThis.fetch", 'export const load = () => globalThis.fetch("https://example.com");'],
+		["globalThis.process", "export const env = globalThis.process.env;"],
+		["computed globalThis access", 'export const env = globalThis["process"].env;'],
+		[
+			"destructuring from globalThis",
+			"const { fetch: get } = globalThis; export const load = get;",
+		],
+		["aliasing globalThis", "const g = globalThis; export const load = g.fetch;"],
+		["Reflect.get on globalThis", 'export const load = Reflect.get(globalThis, "fetch");'],
+		["global", "export const env = global.process;"],
+		["self", "export const load = self.fetch;"],
+		["window", "export const load = window.fetch;"],
+		["Function constructor", 'export const load = new Function("return fetch")();'],
+		["eval", 'export const load = eval("fetch");'],
+	])("rejects indirect global access through %s", (_name, source) => {
+		const found = reasons(source);
+		expect(found.length).toBeGreaterThan(0);
+		expect(found.every((reason) => reason.startsWith("uses the global"))).toBe(true);
+	});
+
 	it("rejects a dynamic import with a computed path", () => {
 		expect(reasons("const name = 'fs'; export const m = await import(name);")).toContain(
 			"dynamic import with a computed path",

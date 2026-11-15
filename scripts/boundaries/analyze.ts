@@ -22,6 +22,12 @@ export const FORBIDDEN_GLOBALS = new Set([
 	"process",
 	"Deno",
 	"Bun",
+	"globalThis",
+	"global",
+	"self",
+	"window",
+	"eval",
+	"Function",
 ]);
 
 const FORBIDDEN_PACKAGES = [

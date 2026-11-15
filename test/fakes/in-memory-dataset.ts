@@ -2,21 +2,29 @@ import type { Category, DatasetManifest, DatasetRecord } from "../../src/domain/
 import type { DatasetPort } from "../../src/ports/index.js";
 
 export class InMemoryDataset implements DatasetPort {
+	private readonly records: readonly DatasetRecord[];
+	private readonly categories: readonly Category[];
+	private readonly manifest: DatasetManifest;
+
 	constructor(
-		private readonly records: readonly DatasetRecord[],
-		private readonly categories: readonly Category[],
-		private readonly manifest: DatasetManifest,
-	) {}
+		records: readonly DatasetRecord[],
+		categories: readonly Category[],
+		manifest: DatasetManifest,
+	) {
+		this.records = structuredClone(records);
+		this.categories = structuredClone(categories);
+		this.manifest = structuredClone(manifest);
+	}
 
 	async listRecords(): Promise<readonly DatasetRecord[]> {
-		return this.records;
+		return structuredClone(this.records);
 	}
 
 	async listCategories(): Promise<readonly Category[]> {
-		return this.categories;
+		return structuredClone(this.categories);
 	}
 
 	async getManifest(): Promise<DatasetManifest> {
-		return this.manifest;
+		return structuredClone(this.manifest);
 	}
 }

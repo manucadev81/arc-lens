@@ -16,13 +16,19 @@ function hashVector(text: string, dimensions: number): Float32Array {
 }
 
 export class FixedEmbedder implements EmbedderPort {
+	private readonly vectors: ReadonlyMap<string, readonly number[]>;
+	private readonly model: EmbedderModel;
+
 	constructor(
-		private readonly vectors: ReadonlyMap<string, readonly number[]> = new Map(),
-		private readonly model: EmbedderModel = FAKE_MODEL,
-	) {}
+		vectors: ReadonlyMap<string, readonly number[]> = new Map(),
+		model: EmbedderModel = FAKE_MODEL,
+	) {
+		this.vectors = new Map([...vectors].map(([text, vector]) => [text, [...vector]]));
+		this.model = { ...model };
+	}
 
 	async state(): Promise<EmbedderState> {
-		return { ready: true, model: this.model };
+		return { ready: true, model: { ...this.model } };
 	}
 
 	async embed(texts: readonly string[]): Promise<readonly Float32Array[]> {
