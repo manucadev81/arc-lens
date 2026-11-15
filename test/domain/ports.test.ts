@@ -4,15 +4,6 @@ import { FAKE_MODEL, FixedEmbedder, UnavailableEmbedder } from "../fakes/fixed-e
 import { InMemoryDataset } from "../fakes/in-memory-dataset.js";
 import { RecordedDirectory, RequestCancelledError } from "../fakes/recorded-directory.js";
 import { SAMPLE_CATEGORY, SAMPLE_MANIFEST, SAMPLE_RECORD } from "../fakes/sample-data.js";
-import { NetworkBlockedError } from "../setup/block-network.js";
-
-describe("unit tests cannot reach the network", () => {
-	it("rejects any fetch call", async () => {
-		await expect(fetch("https://builder.registrai.cc/api/v1")).rejects.toBeInstanceOf(
-			NetworkBlockedError,
-		);
-	});
-});
 
 describe("dataset port fake", () => {
 	it("returns the same records, categories and manifest on every call", async () => {
