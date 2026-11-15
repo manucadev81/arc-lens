@@ -294,7 +294,7 @@ A project can appear many times: at several hackathons, in a grant cohort and in
 **Counting and cards.**
 
 - Gap counts (T-04 to T-06) and category counts count projects, not occurrences.
-- Search and lookup rank occurrences, then collapse them into their project: the project takes the best score of its occurrences and appears once. `limit` counts projects.
+- Search and lookup rank occurrences, then collapse them into their project: the project takes the best score of its occurrences and appears once. `limit` counts projects. In search, directory-only projects (section 6.2) take at most `floor(limit / 2)` of the results; when more directory-only matches qualified than the quota allows, the summary says how many were left out and Coverage marks the answer `complete: false`, so the quota never hides matches silently.
 - A project card lists all its occurrences (event or cohort, prize or grant, source link and data date for each), so no evidence is lost (BR4).
 - Status is computed once per project over the signals of all its occurrences (ADR-0006).
 
@@ -361,10 +361,21 @@ sequenceDiagram
 
 ### 6.2 `get_category_gaps` (F2)
 
-- Without `category`: returns the known categories with the number of projects in each, from the dataset plus the Registrai directory when it is available (P3, T-07).
-- With `category`: resolves the category (section 5.4), lists the projects in it (section 5.6) and the Registrai entries mapped to it, picks T-04, T-05 or T-06 by project count, and adds coverage.
+**Reviewed and unreviewed projects.** A project is *reviewed* when at least one of its occurrences is a dataset record, or when it is a confirmed project in `projects.json` (including one linked to Registrai through `registraiSlug`). A Registrai directory entry that belongs to no reviewed project is *directory-only*: anyone can list an entry in the directory, so it is shown but never trusted to decide a verdict.
+
+- Without `category`: returns the known categories with, for each, the number of reviewed projects and, separately, the number of directory-only entries when Registrai is available (P3, T-07).
+- With `category`: resolves the category (section 5.4) and collects the projects in it (section 5.6), reviewed and directory-only.
+- **Verdict**: `several`, `few` or `none` is computed from reviewed projects only. Directory-only entries can never raise a verdict (a burst of directory entries cannot turn a gap into `several`).
+- **Directory-only entries are disclosed, never dropped**: their ids are returned in `directoryOnlyIds` with `directoryOnlyCount`, listed after the reviewed projects and marked `Directory entry, not reviewed`.
+- **Summary sentence**:
+  - reviewed `several` or `few`: T-04 or T-05, plus T-21 when `directoryOnlyCount > 0`: `<n> more entries from the Registrai directory are listed but not reviewed, so they are not counted.`
+  - reviewed `none` and `directoryOnlyCount = 0`: T-06.
+  - reviewed `none` and `directoryOnlyCount > 0`: T-22, never T-06: `No reviewed project found in this category. <n> Registrai directory entries were found but are not reviewed; they are listed below.` T-06 would claim an absence the directory contradicts (NFR-02).
+  - T-19 (uncertain links) still applies to the reviewed count.
+- Acceptance tests: 10 directory-only entries and 2 reviewed projects give `few`, `directoryOnlyCount: 10` and T-05 plus T-21; 0 reviewed and 3 directory-only give `none` with T-22, not T-06; 0 reviewed and 0 directory-only give T-06; a Registrai entry linked to a confirmed project counts as reviewed.
+
 - Known categories match by id, label or a synonym listed in `categories.json`, case- and accent-insensitive, without the model.
-- Request caps: at most 2 Registrai requests (`/ecosystem` and `/arc/apps-week`), no per-entry detail calls. At most 20 project cards are shown, ordered by name, with the total count in the summary.
+- Request caps: at most 2 Registrai requests (`/ecosystem` and `/arc/apps-week`), no per-entry detail calls. At most 20 reviewed project cards are shown, ordered by name, then at most 20 directory-only entries; the summary gives both totals.
 
 ### 6.3 `lookup_project` (F3)
 
@@ -404,7 +415,7 @@ Full schemas are in ADR-0004. Summary:
 | Tool | Input | Output (`structuredContent`) | Annotations |
 |---|---|---|---|
 | `search_similar_projects` | `idea` (string, 10 to 2,000 characters), `limit` (integer 1 to 10, default 5) | `summary`, `searchMode`, `complete`, `results[]` (project cards with `similarity` and `occurrences`), `coverage`, `attribution` | `readOnlyHint: true`, `idempotentHint: true`, `openWorldHint: true` |
-| `get_category_gaps` | `category` (string, optional, up to 200 characters) | `summary`, `verdict` (`several`, `few`, `none`, or `null` when the category cannot be resolved) or `categories[]`, `projectCount`, `results[]`, `coverage`, `attribution` | same |
+| `get_category_gaps` | `category` (string, optional, up to 200 characters) | `summary`, `directoryOnlyIds`, `directoryOnlyCount`, `verdict` (reviewed projects only: `several`, `few`, `none`, or `null` when the category cannot be resolved) or `categories[]`, `projectCount`, `results[]`, `coverage`, `attribution` | same |
 | `lookup_project` | `name` (string) or `id` (string), at least one | `summary`, `match` (`one`, `several`, `none`), `results[]` or `candidates[]`, `coverage`, `attribution` | same |
 
 Rules for all three:
@@ -507,7 +518,7 @@ Q7 (Arc-specific knowledge in answers) does not change the architecture: links t
 | A-04 | For a source whose terms forbid automated collection, may the maintainer type records by hand? | Section 5.3, US-01 coverage | No until the owner decides; such a source is excluded |
 | A-05 | Confirm the provisional numbers: p95 under 3 s, gaps thresholds 5 and 1, stale after 14 days, Registrai budget 2.5 s | Sections 5.4, 6.1, 6.4 | As proposed |
 | A-06 | A weekly scheduled run that only opens a pull request: does it respect BR6 ("refreshed weekly by the maintainer")? | ADR-0003 | Yes, because nothing is published without the maintainer's merge |
-| A-07 | Product: the card format must show a project with several occurrences (events, grants, directory) and the new texts T-16 to T-20 and `Keyword match only` | Sections 5.6, 6.5; `02-product.md` sections 4.1 and 8.1 | One card per project, one `Type` line per occurrence, each with prize or grant and source |
+| A-07 | Product: the card format must show a project with several occurrences (events, grants, directory) and the new texts T-16 to T-22, the `Directory entry, not reviewed` marker and `Keyword match only` | Sections 5.6, 6.5; `02-product.md` sections 4.1 and 8.1 | One card per project, one `Type` line per occurrence, each with prize or grant and source |
 
 ## 15. Traceability
 

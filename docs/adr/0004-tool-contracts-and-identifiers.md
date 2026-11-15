@@ -191,7 +191,7 @@ Output `structuredContent`: `{ "summary": string, "searchMode": "hybrid" | "keyw
 
 - Every card has `similarity`. In hybrid mode: `high`, `medium` or `low` for results with a cosine value, and `keyword_match` for Registrai entries that the deadline left without an embedding (`03-architecture.md` section 6.1). In keyword-only mode: `keyword_match` for every result. A `keyword_match` card never carries an invented cosine value.
 - `complete` is `false` when semantic matching was unavailable or Registrai was not or only partially searched.
-- `limit` counts projects. Order: fused rank, ties by id (ADR-0002).
+- `limit` counts projects; directory-only projects take at most `floor(limit / 2)` of them, and any left out are reported in the summary with `complete: false`. Order: fused rank, ties by id (ADR-0002).
 
 ### `get_category_gaps`
 
@@ -209,10 +209,10 @@ Input:
 
 Output without `category`: `{ "summary": string, "categories": [{ "id", "label", "projectCount" }], "coverage", "attribution" }`.
 
-Output with `category`: `{ "summary": string, "category": { "id": string | null, "label": string, "matchedBy": "known" | "free_text" | "unresolved" }, "verdict": "several" | "few" | "none" | null, "projectCount": integer, "uncertainLinks": integer, "results": projectCard[], "categories": [...], "coverage", "attribution" }`.
+Output with `category`: `{ "summary": string, "category": { "id": string | null, "label": string, "matchedBy": "known" | "free_text" | "unresolved" }, "verdict": "several" | "few" | "none" | null, "projectCount": integer, "directoryOnlyCount": integer, "directoryOnlyIds": string[], "uncertainLinks": integer, "results": projectCard[], "categories": [...], "coverage", "attribution" }`.
 
-- `projectCount` counts projects (section 5.6 of `03-architecture.md`); `uncertainLinks` is the number of `possible` pairs among them.
-- `summary` is T-04, T-05 or T-06, plus T-19 when merging the uncertain pairs would change the verdict.
+- `projectCount` counts reviewed projects only (sections 5.6 and 6.2 of `03-architecture.md`); `directoryOnlyCount` and `directoryOnlyIds` list unreviewed Registrai directory entries, which never change the verdict; `uncertainLinks` is the number of `possible` pairs among them.
+- `summary` is T-04, T-05 or T-06, plus T-19 when merging the uncertain pairs would change the verdict and T-21 when there are directory-only entries. With no reviewed project but directory-only entries, `summary` is T-22, never T-06.
 - `verdict` is `null` and `matchedBy` is `unresolved` when a free-text category cannot be resolved because semantic matching is unavailable; the answer then lists the known categories with T-18.
 - At most 20 cards are returned, ordered by name.
 
