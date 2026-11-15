@@ -1,0 +1,33 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:common",
+	"$defs": {
+		"slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "maxLength": 120 },
+		"date": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+		"url": { "type": "string", "format": "uri", "pattern": "^https?://", "maxLength": 2048 },
+		"nullableUrl": { "anyOf": [{ "$ref": "#/$defs/url" }, { "type": "null" }] },
+		"occurrenceId": {
+			"type": "string",
+			"maxLength": 120,
+			"pattern": "^(hack|grant):[a-z0-9]+(-[a-z0-9]+)*:[a-z0-9]+(-[a-z0-9]+)*$"
+		},
+		"registraiId": {
+			"type": "string",
+			"maxLength": 120,
+			"pattern": "^registrai:[a-z0-9]+(-[a-z0-9]+)*$"
+		},
+		"projectId": {
+			"type": "string",
+			"maxLength": 120,
+			"pattern": "^proj:[a-z0-9]+(-[a-z0-9]+)*$"
+		},
+		"anyId": {
+			"anyOf": [
+				{ "$ref": "#/$defs/occurrenceId" },
+				{ "$ref": "#/$defs/registraiId" },
+				{ "$ref": "#/$defs/projectId" }
+			]
+		},
+		"shortText": { "type": "string", "minLength": 1, "maxLength": 200 }
+	}
+}

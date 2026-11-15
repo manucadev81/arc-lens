@@ -1,0 +1,9 @@
+{
+	"datasetVersion": "0.1.0",
+	"schemaVersion": "1",
+	"updatedAt": "2026-11-12",
+	"sources": [
+		{ "sourceId": "sample-grants", "dataDate": "2026-10-02", "recordCount": 1 },
+		{ "sourceId": "sample-showcase", "dataDate": "2026-11-10", "recordCount": 2 }
+	]
+}

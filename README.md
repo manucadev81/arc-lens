@@ -17,6 +17,7 @@ pnpm check
 | `pnpm typecheck` | Type-checks the domain with no Node.js or DOM types, and the rest of the project with Node.js types |
 | `pnpm boundaries` | Fails if `src/domain` or `src/ports` import adapters, the MCP SDK, transformers, HTTP clients or Node.js built-ins, or use globals such as `fetch` or `process` |
 | `pnpm test` | Runs unit tests (Vitest). `fetch` is blocked, so a test that tries to reach the network fails |
+| `pnpm validate:data` | Validates every file in `data/` against `schemas/` (JSON Schema 2020-12) and the cross-file rules: unique and well-formed ids, no reuse of retired ids, valid references, manifest counts and personal-data patterns |
 | `pnpm build` | Compiles `src` to `dist` |
 | `pnpm check` | Runs all of the above in CI order |
 
@@ -29,3 +30,5 @@ pnpm check
 | `src/adapters` | Implementations of the ports (packaged files, transformers.js, Registrai, MCP transports) |
 | `scripts/boundaries` | Domain boundary analysis used by `pnpm boundaries` |
 | `test/fakes` | Deterministic fakes for every port: in-memory dataset, fixed-vector embedder, recorded directory and fixed clock |
+| `schemas` | JSON Schema 2020-12 for records, sources, categories, aliases, projects, identity proposals and the manifest |
+| `data` | The published dataset. Every change goes through a pull request with the dataset review checklist |

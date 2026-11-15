@@ -1,0 +1,24 @@
+[
+	{
+		"id": "sample-showcase",
+		"name": "Sample showcase",
+		"kind": "hackathon",
+		"events": ["sample-hack-2026"],
+		"termsUrl": "https://example.com/terms",
+		"termsCheck": {
+			"result": "allowed",
+			"checkedAt": "2026-11-15",
+			"notes": "Synthetic source for tests."
+		},
+		"method": "collector"
+	},
+	{
+		"id": "sample-grants",
+		"name": "Sample grants",
+		"kind": "grant",
+		"events": [],
+		"termsUrl": null,
+		"termsCheck": { "result": "pending", "checkedAt": "2026-11-15", "notes": "" },
+		"method": "manual"
+	}
+]

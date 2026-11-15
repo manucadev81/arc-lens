@@ -1,0 +1,16 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:aliases",
+	"type": "array",
+	"items": {
+		"type": "object",
+		"additionalProperties": false,
+		"required": ["from", "to", "reason", "at"],
+		"properties": {
+			"from": { "$ref": "urn:arc-lens:schema:common#/$defs/anyId" },
+			"to": { "$ref": "urn:arc-lens:schema:common#/$defs/anyId" },
+			"reason": { "enum": ["renamed", "merged"] },
+			"at": { "$ref": "urn:arc-lens:schema:common#/$defs/date" }
+		}
+	}
+}

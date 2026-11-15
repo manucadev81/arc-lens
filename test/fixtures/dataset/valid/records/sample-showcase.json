@@ -1,0 +1,53 @@
+{
+	"sourceId": "sample-showcase",
+	"records": [
+		{
+			"id": "hack:sample-hack-2026:sample-market",
+			"kind": "hackathon_project",
+			"name": "Sample Market",
+			"aliases": ["SampleMkt"],
+			"description": "Agents list and buy datasets, paying per request in USDC on 2026-11-10.",
+			"categories": ["agent-payments", "data-markets"],
+			"event": { "id": "sample-hack-2026", "name": "Sample Hack 2026", "track": "Arc" },
+			"grant": null,
+			"prize": "winner",
+			"links": {
+				"demo": "https://example.com/demo",
+				"repository": "https://github.com/example/sample-market",
+				"website": null
+			},
+			"source": {
+				"id": "sample-showcase",
+				"url": "https://example.com/showcase/sample-market",
+				"dataDate": "2026-11-10"
+			},
+			"status": {
+				"value": "live",
+				"checkedAt": "2026-11-10",
+				"evidence": [{ "signal": "demo", "result": "responds", "at": "2026-11-10" }]
+			},
+			"firstSeen": "2026-11-10",
+			"updatedAt": "2026-11-10"
+		},
+		{
+			"id": "hack:sample-hack-2026:sample-escrow",
+			"kind": "hackathon_project",
+			"name": "Sample Escrow",
+			"aliases": [],
+			"description": "Milestone escrow built with the @circle-fin/sdk package.",
+			"categories": [],
+			"event": { "id": "sample-hack-2026", "name": "Sample Hack 2026", "track": null },
+			"grant": null,
+			"prize": "unknown",
+			"links": { "demo": null, "repository": null, "website": null },
+			"source": {
+				"id": "sample-showcase",
+				"url": "https://example.com/showcase/sample-escrow",
+				"dataDate": "2026-11-10"
+			},
+			"status": { "value": "unknown", "checkedAt": "2026-11-10", "evidence": [] },
+			"firstSeen": "2026-11-10",
+			"updatedAt": "2026-11-10"
+		}
+	]
+}

@@ -1,0 +1,29 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:projects",
+	"type": "array",
+	"items": {
+		"type": "object",
+		"additionalProperties": false,
+		"required": ["id", "name", "occurrences", "registraiSlug", "evidence", "confirmedAt"],
+		"properties": {
+			"id": { "$ref": "urn:arc-lens:schema:common#/$defs/projectId" },
+			"name": { "$ref": "urn:arc-lens:schema:common#/$defs/shortText" },
+			"occurrences": {
+				"type": "array",
+				"minItems": 1,
+				"uniqueItems": true,
+				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/occurrenceId" }
+			},
+			"registraiSlug": {
+				"anyOf": [{ "$ref": "urn:arc-lens:schema:common#/$defs/slug" }, { "type": "null" }]
+			},
+			"evidence": {
+				"type": "array",
+				"minItems": 1,
+				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/shortText" }
+			},
+			"confirmedAt": { "$ref": "urn:arc-lens:schema:common#/$defs/date" }
+		}
+	}
+}

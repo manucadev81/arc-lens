@@ -1,0 +1,32 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:sources",
+	"type": "array",
+	"items": {
+		"type": "object",
+		"additionalProperties": false,
+		"required": ["id", "name", "kind", "events", "termsUrl", "termsCheck", "method"],
+		"properties": {
+			"id": { "$ref": "urn:arc-lens:schema:common#/$defs/slug" },
+			"name": { "$ref": "urn:arc-lens:schema:common#/$defs/shortText" },
+			"kind": { "enum": ["hackathon", "grant"] },
+			"events": {
+				"type": "array",
+				"uniqueItems": true,
+				"items": { "$ref": "urn:arc-lens:schema:common#/$defs/slug" }
+			},
+			"termsUrl": { "$ref": "urn:arc-lens:schema:common#/$defs/nullableUrl" },
+			"termsCheck": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["result", "checkedAt", "notes"],
+				"properties": {
+					"result": { "enum": ["allowed", "forbidden", "pending"] },
+					"checkedAt": { "$ref": "urn:arc-lens:schema:common#/$defs/date" },
+					"notes": { "type": "string", "maxLength": 1000 }
+				}
+			},
+			"method": { "enum": ["collector", "manual"] }
+		}
+	}
+}

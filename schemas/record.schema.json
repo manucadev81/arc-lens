@@ -1,0 +1,228 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:record",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"id",
+		"kind",
+		"name",
+		"aliases",
+		"description",
+		"categories",
+		"event",
+		"grant",
+		"prize",
+		"links",
+		"source",
+		"status",
+		"firstSeen",
+		"updatedAt"
+	],
+	"properties": {
+		"id": {
+			"$ref": "urn:arc-lens:schema:common#/$defs/occurrenceId"
+		},
+		"kind": {
+			"enum": ["hackathon_project", "grant_recipient"]
+		},
+		"name": {
+			"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+		},
+		"aliases": {
+			"type": "array",
+			"uniqueItems": true,
+			"items": {
+				"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+			}
+		},
+		"description": {
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 400
+		},
+		"categories": {
+			"type": "array",
+			"uniqueItems": true,
+			"items": {
+				"$ref": "urn:arc-lens:schema:common#/$defs/slug"
+			}
+		},
+		"event": {
+			"anyOf": [
+				{
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["id", "name", "track"],
+					"properties": {
+						"id": {
+							"$ref": "urn:arc-lens:schema:common#/$defs/slug"
+						},
+						"name": {
+							"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+						},
+						"track": {
+							"anyOf": [
+								{
+									"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+								},
+								{
+									"type": "null"
+								}
+							]
+						}
+					}
+				},
+				{
+					"type": "null"
+				}
+			]
+		},
+		"grant": {
+			"anyOf": [
+				{
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["program", "cohort", "date"],
+					"properties": {
+						"program": {
+							"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+						},
+						"cohort": {
+							"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+						},
+						"date": {
+							"$ref": "urn:arc-lens:schema:common#/$defs/date"
+						}
+					}
+				},
+				{
+					"type": "null"
+				}
+			]
+		},
+		"prize": {
+			"enum": ["winner", "not_winner", "unknown"]
+		},
+		"links": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["demo", "repository", "website"],
+			"properties": {
+				"demo": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/nullableUrl"
+				},
+				"repository": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/nullableUrl"
+				},
+				"website": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/nullableUrl"
+				}
+			}
+		},
+		"source": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id", "url", "dataDate"],
+			"properties": {
+				"id": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/slug"
+				},
+				"url": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/url"
+				},
+				"dataDate": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/date"
+				}
+			}
+		},
+		"status": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["value", "checkedAt", "evidence"],
+			"properties": {
+				"value": {
+					"enum": ["live", "not_live", "unknown"]
+				},
+				"checkedAt": {
+					"$ref": "urn:arc-lens:schema:common#/$defs/date"
+				},
+				"evidence": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["signal", "result", "at"],
+						"properties": {
+							"signal": {
+								"enum": ["registrai", "demo", "repository"]
+							},
+							"result": {
+								"$ref": "urn:arc-lens:schema:common#/$defs/shortText"
+							},
+							"at": {
+								"$ref": "urn:arc-lens:schema:common#/$defs/date"
+							}
+						}
+					}
+				}
+			}
+		},
+		"firstSeen": {
+			"$ref": "urn:arc-lens:schema:common#/$defs/date"
+		},
+		"updatedAt": {
+			"$ref": "urn:arc-lens:schema:common#/$defs/date"
+		}
+	},
+	"allOf": [
+		{
+			"if": {
+				"properties": {
+					"kind": {
+						"const": "hackathon_project"
+					}
+				},
+				"required": ["kind"]
+			},
+			"then": {
+				"properties": {
+					"id": {
+						"pattern": "^hack:",
+						"type": "string"
+					},
+					"event": {
+						"type": "object"
+					},
+					"grant": {
+						"type": "null"
+					}
+				}
+			}
+		},
+		{
+			"if": {
+				"properties": {
+					"kind": {
+						"const": "grant_recipient"
+					}
+				},
+				"required": ["kind"]
+			},
+			"then": {
+				"properties": {
+					"id": {
+						"pattern": "^grant:",
+						"type": "string"
+					},
+					"grant": {
+						"type": "object"
+					},
+					"event": {
+						"type": "null"
+					}
+				}
+			}
+		}
+	]
+}

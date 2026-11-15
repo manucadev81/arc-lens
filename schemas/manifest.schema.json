@@ -1,0 +1,25 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:manifest",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["datasetVersion", "schemaVersion", "updatedAt", "sources"],
+	"properties": {
+		"datasetVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$" },
+		"schemaVersion": { "const": "1" },
+		"updatedAt": { "$ref": "urn:arc-lens:schema:common#/$defs/date" },
+		"sources": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["sourceId", "dataDate", "recordCount"],
+				"properties": {
+					"sourceId": { "$ref": "urn:arc-lens:schema:common#/$defs/slug" },
+					"dataDate": { "$ref": "urn:arc-lens:schema:common#/$defs/date" },
+					"recordCount": { "type": "integer", "minimum": 0 }
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,27 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:arc-lens:schema:categories",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["categories", "registraiCategories"],
+	"properties": {
+		"categories": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["id", "label", "description"],
+				"properties": {
+					"id": { "$ref": "urn:arc-lens:schema:common#/$defs/slug" },
+					"label": { "$ref": "urn:arc-lens:schema:common#/$defs/shortText" },
+					"description": { "type": "string", "minLength": 1, "maxLength": 300 }
+				}
+			}
+		},
+		"registraiCategories": {
+			"type": "object",
+			"propertyNames": { "minLength": 1, "maxLength": 120 },
+			"additionalProperties": { "$ref": "urn:arc-lens:schema:common#/$defs/slug" }
+		}
+	}
+}
