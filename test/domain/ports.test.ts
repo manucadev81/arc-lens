@@ -49,6 +49,7 @@ describe("ecosystem directory port fake", () => {
 		categories: ["payments"],
 		status: "active",
 		url: "https://example.com/directory/sample",
+		links: [],
 	};
 
 	it("replays recorded answers and honors the limit", async () => {

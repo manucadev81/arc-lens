@@ -5,6 +5,7 @@ export interface DirectoryEntry {
 	readonly categories: readonly string[];
 	readonly status: string | null;
 	readonly url: string;
+	readonly links: readonly string[];
 }
 
 export interface DirectoryQuery {
