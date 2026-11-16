@@ -1,6 +1,6 @@
 import { lookup as dnsLookup } from "node:dns";
 import https from "node:https";
-import type { LookupFunction } from "node:net";
+import { isIP, type LookupFunction } from "node:net";
 import type { DemoSignal, IsoDate, StatusConfig } from "../../domain/index.js";
 import { isPublicAddress } from "./address.js";
 
@@ -29,6 +29,7 @@ export function parseSafeHttpsUrl(value: string): URL | null {
 	}
 	if (url.protocol !== "https:" || url.username || url.password) return null;
 	if (url.port && url.port !== "443") return null;
+	if (isIP(url.hostname.replace(/^\[(.*)\]$/, "$1")) !== 0) return null;
 	return url;
 }
 
@@ -95,6 +96,18 @@ export function createHttpsDemoTransport(lookup: LookupFunction = publicOnlyLook
 	return {
 		request: (url, timeoutMs) =>
 			new Promise<DemoResponse>((resolve, reject) => {
+				const host = url.hostname.replace(/^\[(.*)\]$/, "$1");
+				if (isIP(host) !== 0 && !isPublicAddress(host)) {
+					reject(new BlockedTargetError(`non-public address ${host}`));
+					return;
+				}
+				let settled = false;
+				const finish = (action: () => void) => {
+					if (settled) return;
+					settled = true;
+					clearTimeout(timer);
+					action();
+				};
 				const request = https.request(
 					url,
 					{
@@ -105,18 +118,26 @@ export function createHttpsDemoTransport(lookup: LookupFunction = publicOnlyLook
 					},
 					(response) => {
 						const location = response.headers.location;
-						resolve({
-							status: response.statusCode ?? 0,
-							location: typeof location === "string" ? location : null,
-						});
+						finish(() =>
+							resolve({
+								status: response.statusCode ?? 0,
+								location: typeof location === "string" ? location : null,
+							}),
+						);
 						response.destroy();
 						request.destroy();
 					},
 				);
+				const timer = setTimeout(
+					() => {
+						request.destroy(new Error("Demo check deadline reached"));
+					},
+					Math.max(0, timeoutMs),
+				);
 				request.on("timeout", () => request.destroy(new Error("Demo check timed out")));
 				request.on("error", (error) => {
 					const cause = (error as { cause?: unknown }).cause;
-					reject(cause instanceof BlockedTargetError ? cause : error);
+					finish(() => reject(cause instanceof BlockedTargetError ? cause : error));
 				});
 				request.end();
 			}),

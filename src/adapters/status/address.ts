@@ -69,6 +69,15 @@ function isPublicIpv6(ip: string): boolean {
 			`${(groups[6] ?? 0) >> 8}.${(groups[6] ?? 0) & 255}.${(groups[7] ?? 0) >> 8}.${(groups[7] ?? 0) & 255}`,
 		);
 	}
+	const embedded = (high: number, low: number) =>
+		`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+	if (groups.slice(0, 6).every((g) => g === 0)) {
+		return isPublicIpv4(embedded(groups[6] ?? 0, groups[7] ?? 0));
+	}
+	if (first === 0x0064 && groups[1] === 0xff9b && groups.slice(2, 6).every((g) => g === 0)) {
+		return isPublicIpv4(embedded(groups[6] ?? 0, groups[7] ?? 0));
+	}
+	if (first === 0x2002) return isPublicIpv4(embedded(groups[1] ?? 0, groups[2] ?? 0));
 	if ((first & 0xfe00) === 0xfc00) return false;
 	if ((first & 0xffc0) === 0xfe80) return false;
 	if ((first & 0xff00) === 0xff00) return false;

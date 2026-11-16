@@ -1,3 +1,5 @@
+import { once } from "node:events";
+import net, { type LookupFunction } from "node:net";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readDatasetFiles, readSchemas } from "../../src/adapters/dataset/files.js";
@@ -15,6 +17,7 @@ import {
 	createHttpsDemoTransport,
 	type DemoResponse,
 	type DemoTransport,
+	parseSafeHttpsUrl,
 } from "../../src/adapters/status/demo-check.js";
 import {
 	checkRepository,
@@ -304,5 +307,117 @@ describe("refresh record status", () => {
 		if (file) file.content.records[0] = refreshed;
 		const validate = createDatasetValidator(readSchemas(path.join(root, "schemas")));
 		expect(validate(files)).toEqual([]);
+	});
+});
+
+describe("SSRF through IP literals", () => {
+	it.each([
+		"https://127.0.0.1/",
+		"https://2130706433/",
+		"https://0x7f.1/",
+		"https://[::1]/",
+		"https://10.0.0.1/",
+		"https://169.254.169.254/latest/meta-data/",
+		"https://8.8.8.8/",
+		"https://[2606:4700:4700::1111]/",
+	])("rejects the IP literal %s before any request", async (link) => {
+		expect(parseSafeHttpsUrl(link)).toBeNull();
+		const unused: DemoTransport = {
+			request: async () => {
+				throw new Error("must not be called");
+			},
+		};
+		expect(await checkDemo(link, unused, CONFIG, TODAY)).toEqual({
+			result: "unreadable",
+			at: TODAY,
+		});
+	});
+
+	it("rejects a redirect to an IP literal", async () => {
+		const redirect = transport([{ status: 302, location: "https://169.254.169.254/latest/" }]);
+		expect((await checkDemo("https://example.com/", redirect, CONFIG, TODAY)).result).toBe(
+			"unreadable",
+		);
+		expect(redirect.urls).toEqual(["https://example.com/"]);
+	});
+
+	it("the real transport never opens a connection to a private IP literal", async () => {
+		let connections = 0;
+		const spy = net.createServer((socket) => {
+			connections += 1;
+			socket.destroy();
+		});
+		spy.listen(0, "127.0.0.1");
+		await once(spy, "listening");
+		const { port } = spy.address() as net.AddressInfo;
+		try {
+			await expect(
+				createHttpsDemoTransport().request(new URL(`https://127.0.0.1:${port}/`), 1000),
+			).rejects.toBeInstanceOf(BlockedTargetError);
+			expect(
+				await checkDemo("https://127.0.0.1/", createHttpsDemoTransport(), CONFIG, TODAY),
+			).toEqual({
+				result: "unreadable",
+				at: TODAY,
+			});
+			expect(connections).toBe(0);
+		} finally {
+			spy.close();
+		}
+	});
+});
+
+describe("total deadline", () => {
+	it("aborts a server that keeps the connection alive by sending bytes slowly", async () => {
+		const sockets: net.Socket[] = [];
+		const slow = net.createServer((socket) => {
+			sockets.push(socket);
+			socket.write(Buffer.from([0x16, 0x03, 0x01, 0x40, 0x00]));
+			const drip = setInterval(() => {
+				if (!socket.destroyed) socket.write(Buffer.from([0x00]));
+			}, 50);
+			socket.on("close", () => clearInterval(drip));
+			socket.on("error", () => clearInterval(drip));
+		});
+		slow.listen(0, "127.0.0.1");
+		await once(slow, "listening");
+		const { port } = slow.address() as net.AddressInfo;
+		const loopbackLookup: LookupFunction = (_host, options, callback) => {
+			if (options.all) {
+				(callback as unknown as (e: null, a: { address: string; family: number }[]) => void)(null, [
+					{ address: "127.0.0.1", family: 4 },
+				]);
+				return;
+			}
+			callback(null, "127.0.0.1", 4);
+		};
+		const started = Date.now();
+		try {
+			await expect(
+				createHttpsDemoTransport(loopbackLookup).request(
+					new URL(`https://localhost:${port}/`),
+					300,
+				),
+			).rejects.toThrow("Demo check deadline reached");
+			expect(Date.now() - started).toBeLessThan(1500);
+		} finally {
+			for (const socket of sockets) socket.destroy();
+			slow.close();
+		}
+	});
+});
+
+describe("IPv6 addresses that embed IPv4", () => {
+	it.each([
+		["::127.0.0.1", false],
+		["::a00:1", false],
+		["64:ff9b::7f00:1", false],
+		["64:ff9b::a9fe:a9fe", false],
+		["2002:7f00:1::", false],
+		["2002:a00:1::1", false],
+		["64:ff9b::808:808", true],
+		["2002:808:808::1", true],
+	])("%s is public: %s", (ip, expected) => {
+		expect(isPublicAddress(ip)).toBe(expected);
 	});
 });
