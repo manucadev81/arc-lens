@@ -13,3 +13,4 @@ export type {
 	SourceDataDate,
 	StatusEvidence,
 } from "./records.js";
+export * from "./status.js";
