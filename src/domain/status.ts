@@ -38,11 +38,17 @@ export interface StatusSignals {
 	readonly repository: RepositorySignal | null;
 }
 
+export interface OccurrenceEvidence {
+	readonly occurrenceId: string;
+	readonly evidence: readonly StatusEvidence[];
+}
+
 export interface StatusDecision {
 	readonly value: ProjectStatusValue;
 	readonly rule: 1 | 2 | 3 | 4 | 5;
 	readonly evidence: string;
 	readonly signals: StatusSignals;
+	readonly occurrences: readonly OccurrenceEvidence[];
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,7 +90,7 @@ export function registraiText(signal: RegistraiSignal): string {
 		case "live":
 			return `Registrai status live, queried ${signal.at}`;
 		case "announced":
-			return "announced on Registrai, not launched";
+			return `announced on Registrai, not launched, queried ${signal.at}`;
 		case "deployed":
 			return `Registrai status deployed, queried ${signal.at}`;
 		case "missing":
@@ -114,11 +120,16 @@ export function decideStatus(
 	today: IsoDate,
 	config: StatusConfig,
 ): StatusDecision {
-	const decide = (value: ProjectStatusValue, rule: StatusDecision["rule"], evidence?: string) => ({
+	const decide = (
+		value: ProjectStatusValue,
+		rule: StatusDecision["rule"],
+		evidence?: string,
+	): StatusDecision => ({
 		value,
 		rule,
 		evidence: evidence ?? evidenceText(signals),
 		signals,
+		occurrences: [],
 	});
 	if (signals.registrai?.value === "live")
 		return decide("live", 1, registraiText(signals.registrai));
@@ -246,6 +257,11 @@ export function recordStatus(
 	return { value: decision.value, checkedAt: today, evidence: signalsToEvidence(signals) };
 }
 
+function occurrenceEvidenceText(occurrence: OccurrenceEvidence): string {
+	const read = occurrence.evidence.map((item) => `${item.result} ${item.at}`);
+	return `${occurrence.occurrenceId}: ${read.length > 0 ? read.join(", ") : "no signal recorded"}`;
+}
+
 export function projectStatus(
 	records: readonly DatasetRecord[],
 	registrai: RegistraiSignal | null,
@@ -256,5 +272,15 @@ export function projectStatus(
 		records.map((record) => evidenceToSignals(record.status.evidence)),
 		registrai,
 	);
-	return decideStatus(signals, today, config);
+	const decision = decideStatus(signals, today, config);
+	const occurrences = records.map((record) => ({
+		occurrenceId: record.id,
+		evidence: record.status.evidence.map((item) => ({ ...item })),
+	}));
+	if (occurrences.length <= 1) return { ...decision, occurrences };
+	return {
+		...decision,
+		occurrences,
+		evidence: `${decision.evidence}. Signals by occurrence: ${occurrences.map(occurrenceEvidenceText).join("; ")}`,
+	};
 }

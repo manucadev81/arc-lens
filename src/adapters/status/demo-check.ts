@@ -53,6 +53,7 @@ export async function checkDemo(
 		} catch (error) {
 			return { result: error instanceof BlockedTargetError ? "unreadable" : "fails", at: today };
 		}
+		if (now() > deadline) return { result: "fails", at: today };
 		if (response.status >= 200 && response.status < 300) return { result: "responds", at: today };
 		if (response.status >= 300 && response.status < 400 && response.location) {
 			let next: URL;

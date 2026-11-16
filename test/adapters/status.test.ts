@@ -191,6 +191,19 @@ describe("demo check", () => {
 		);
 	});
 
+	it("a 2xx that arrives after the overall deadline fails", async () => {
+		let clock = 0;
+		const late: DemoTransport = {
+			request: async () => {
+				clock += 11_000;
+				return { status: 200, location: null };
+			},
+		};
+		expect((await checkDemo("https://example.com", late, CONFIG, TODAY, () => clock)).result).toBe(
+			"fails",
+		);
+	});
+
 	it("the real transport refuses a host that resolves to loopback before connecting", async () => {
 		expect(
 			await checkDemo("https://localhost/", createHttpsDemoTransport(), CONFIG, TODAY),
@@ -220,12 +233,18 @@ describe("repository check", () => {
 
 	it.each([
 		["https://github.com/Org/Repo.git", { owner: "Org", repository: "Repo" }],
-		["https://www.github.com/org/repo/tree/main", { owner: "org", repository: "repo" }],
+		["https://github.com/org/repo", { owner: "org", repository: "repo" }],
+		["https://github.com/org/repo/", { owner: "org", repository: "repo" }],
+		["https://www.github.com/org/repo", null],
+		["https://github.com/org/repo/tree/main", null],
+		["https://github.com/org/repo?tab=readme", null],
+		["https://github.com/org/repo#readme", null],
 		["https://gitlab.com/org/repo", null],
 		["http://github.com/org/repo", null],
+		["https://user@github.com/org/repo", null],
 		["https://github.com/org", null],
 		["https://github.com/org/..", null],
-	])("parses %s", (link, expected) => {
+	])("accepts only https://github.com/<owner>/<repo>: %s", (link, expected) => {
 		expect(parseGitHubRepository(link)).toEqual(expected);
 	});
 
@@ -255,6 +274,23 @@ describe("repository check", () => {
 			result: { kind: "last_commit", date: "2026-11-02" },
 			at: TODAY,
 		});
+	});
+
+	it("treats an invalid commit date or a non-boolean archived flag as unreadable", async () => {
+		const github = client({
+			"/repos/org/baddate": { status: 200, body: { archived: false } },
+			"/repos/org/baddate/commits?per_page=1": {
+				status: 200,
+				body: [{ commit: { committer: { date: "2026-02-30T10:00:00Z" } } }],
+			},
+			"/repos/org/noflag": { status: 200, body: { name: "noflag" } },
+			"/repos/org/textflag": { status: 200, body: { archived: "true" } },
+		});
+		for (const name of ["baddate", "noflag", "textflag"]) {
+			expect(
+				(await checkRepository(`https://github.com/org/${name}`, github, TODAY)).result,
+			).toEqual({ kind: "unreadable" });
+		}
 	});
 
 	it("reports rate limits, errors and malformed answers as unreadable, not as not found", async () => {

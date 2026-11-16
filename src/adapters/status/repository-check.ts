@@ -9,27 +9,26 @@ export interface GitHubClient {
 	get(path: string): Promise<GitHubResponse>;
 }
 
-const SEGMENT = /^[A-Za-z0-9_.-]{1,100}$/;
-
 export function parseGitHubRepository(link: string): { owner: string; repository: string } | null {
-	let url: URL;
-	try {
-		url = new URL(link);
-	} catch {
-		return null;
-	}
-	const host = url.hostname.toLowerCase().replace(/^www\./, "");
-	if (url.protocol !== "https:" || host !== "github.com" || url.username || url.password)
-		return null;
-	const [owner, raw] = url.pathname.split("/").filter((part) => part.length > 0);
-	const repository = raw?.replace(/\.git$/, "");
-	if (!owner || !repository || !SEGMENT.test(owner) || !SEGMENT.test(repository)) return null;
-	if (repository === "." || repository === "..") return null;
+	const match =
+		/^https:\/\/github\.com\/([A-Za-z0-9_.-]{1,100})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)?\/?$/.exec(
+			link.trim(),
+		);
+	const owner = match?.[1];
+	const repository = match?.[2];
+	if (!owner || !repository) return null;
+	if ([owner, repository].some((part) => part === "." || part === "..")) return null;
 	return { owner, repository };
 }
 
 function isoDate(value: unknown): IsoDate | null {
-	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) ? value.slice(0, 10) : null;
+	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(value))
+		return null;
+	const date = value.slice(0, 10);
+	const calendar = new Date(`${date}T00:00:00Z`);
+	return !Number.isNaN(calendar.getTime()) && calendar.toISOString().slice(0, 10) === date
+		? date
+		: null;
 }
 
 export async function checkRepository(
@@ -51,9 +50,9 @@ export async function checkRepository(
 		) {
 			return { result: { kind: "unreadable" }, at: today };
 		}
-		if ((repository.body as { archived?: unknown }).archived === true) {
-			return { result: { kind: "archived" }, at: today };
-		}
+		const archived = (repository.body as { archived?: unknown }).archived;
+		if (typeof archived !== "boolean") return { result: { kind: "unreadable" }, at: today };
+		if (archived) return { result: { kind: "archived" }, at: today };
 		const commits = await client.get(`${base}/commits?per_page=1`);
 		if (commits.status !== 200 || !Array.isArray(commits.body)) {
 			return { result: { kind: "unreadable" }, at: today };

@@ -64,7 +64,9 @@ describe("ADR-0006 precedence", () => {
 		);
 		expect(decision.value).toBe("not_live");
 		expect(decision.rule).toBe(2);
-		expect(decision.evidence.startsWith("announced on Registrai, not launched")).toBe(true);
+		expect(
+			decision.evidence.startsWith(`announced on Registrai, not launched, queried ${TODAY}`),
+		).toBe(true);
 	});
 
 	it.each([
@@ -131,6 +133,14 @@ describe("ADR-0006 precedence", () => {
 });
 
 describe("evidence text", () => {
+	it("dates every Registrai value, including announced", () => {
+		for (const value of ["live", "deployed", "announced", "missing", "unreadable"] as const) {
+			expect(
+				decideStatus(signals(null, null, { value, at: "2026-11-14" }), TODAY, CONFIG).evidence,
+			).toContain("2026-11-14");
+		}
+	});
+
 	it("lists every signal read with its date, including failures", () => {
 		const decision = decideStatus(
 			{
@@ -200,6 +210,48 @@ describe("project aggregation", () => {
 			"not_live",
 		);
 		expect(records).toEqual(copy);
+	});
+
+	it("keeps the evidence of every occurrence in the project decision", () => {
+		const records = [
+			record(
+				"hack:e1:a",
+				{ result: "fails", at: "2026-11-10" },
+				{ result: commit(400), at: "2026-11-10" },
+			),
+			record(
+				"hack:e2:a",
+				{ result: "responds", at: "2026-11-09" },
+				{ result: { kind: "archived" }, at: "2026-11-09" },
+			),
+			record(
+				"grant:c1:a",
+				{ result: "no_demo_link", at: "2026-11-11" },
+				{ result: commit(20), at: "2026-11-11" },
+			),
+		];
+		const decision = projectStatus(records, { value: "deployed", at: TODAY }, TODAY, CONFIG);
+		expect(decision.occurrences).toEqual(
+			records.map((r) => ({ occurrenceId: r.id, evidence: r.status.evidence })),
+		);
+		for (const item of records.flatMap((r) => r.status.evidence)) {
+			expect(decision.evidence).toContain(`${item.result} ${item.at}`);
+		}
+		expect(decision.evidence).toContain(`Registrai status deployed, queried ${TODAY}`);
+		expect(decision.evidence).toContain("hack:e1:a: demo fails 2026-11-10");
+	});
+
+	it("a single-occurrence project keeps the plain evidence text", () => {
+		const one = record(
+			"hack:e1:a",
+			{ result: "responds", at: TODAY },
+			{ result: commit(3), at: TODAY },
+		);
+		const decision = projectStatus([one], null, TODAY, CONFIG);
+		expect(decision.evidence).toBe(
+			`demo responds ${TODAY}; last commit ${daysAgo(3)} (checked ${TODAY})`,
+		);
+		expect(decision.occurrences).toEqual([{ occurrenceId: one.id, evidence: one.status.evidence }]);
 	});
 
 	it("prefers a known repository state over an unreadable one", () => {
