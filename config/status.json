@@ -1,0 +1,7 @@
+{
+	"version": 1,
+	"liveCommitWithinDays": 180,
+	"notLiveCommitOlderThanDays": 365,
+	"demoTimeoutSeconds": 10,
+	"maxRedirects": 5
+}
